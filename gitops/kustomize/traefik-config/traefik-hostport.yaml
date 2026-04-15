@@ -9,6 +9,8 @@ spec:
   valuesContent: |-
     service:
       type: NodePort
+    deployment:
+      hostNetwork: true
     ports:
       web:
         hostPort: 80
