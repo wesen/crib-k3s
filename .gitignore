@@ -1,0 +1,5 @@
+kubeconfig.yaml
+*.tfstate
+*.tfstate.backup
+.terraform/
+.envrc

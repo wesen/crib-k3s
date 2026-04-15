@@ -1,0 +1,27 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: argocd-server-crib
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  labels:
+    app.kubernetes.io/component: argocd
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - argocd.crib.scapegoat.dev
+      secretName: argocd-server-crib-tls
+  rules:
+    - host: argocd.crib.scapegoat.dev
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: argocd-server
+                port:
+                  name: http
