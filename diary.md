@@ -123,3 +123,69 @@ Hetzner uses HTTP01 challenge because the VM has a public IP and Let's Encrypt c
 - Create ArgoCD Application manifests
 - Bootstrap ArgoCD to watch the crib-k3s repo
 - Clean up manual resources (replace with ArgoCD-managed)
+
+## Step 5: Create crib-k3s Repo and Bootstrap ArgoCD
+
+### What happened
+
+Created `~/code/wesen/crib-k3s/` as the GitOps repo, following the exact pattern from hetzner-k3s. Pushed to `github.com/wesen/crib-k3s`.
+
+### Structure
+
+```
+gitops/
+├── applications/
+│   ├── platform-cert-issuer.yaml   # ArgoCD app for cert-manager config
+│   └── argocd-crib.yaml           # ArgoCD app for ArgoCD ingress
+└── kustomize/
+    ├── platform-cert-issuer/       # ClusterIssuer + wildcard cert (DNS01)
+    └── argocd-crib/               # ArgoCD insecure mode + Ingress
+```
+
+### GitHub push protection incident
+
+First push was rejected because the DO token was in git history (in `digitalocean-secret.yaml`). Even after deleting the file and committing, the token was still in the first commit. Had to use `git filter-branch` to rewrite history and remove the file from all commits.
+
+**Lesson:** Never commit secrets even temporarily. If you do, `git filter-branch` or `git filter-repo` is needed to clean history before pushing to GitHub with push protection enabled.
+
+### Secret management decision
+
+The DO token is now a manually-created Kubernetes secret (`digitalocean-dns` in `cert-manager` namespace). The kustomize package has a comment explaining this. This is the same pattern hetzner uses — platform secrets are manual, app manifests are in git.
+
+### ArgoCD bootstrap
+
+```bash
+# Clean up manual resources
+kubectl delete ingressroute argocd argocd-tailscale -n argocd
+kubectl delete certificate crib-scapegoat-dev-wildcard -n cert-manager
+kubectl delete clusterissuer letsencrypt-prod
+
+# Apply ArgoCD Applications — they self-manage from here
+kubectl apply -f gitops/applications/platform-cert-issuer.yaml
+kubectl apply -f gitops/applications/argocd-crib.yaml
+```
+
+Both apps synced and healthy immediately. The wildcard cert was already cached from the manual step, and the ArgoCD ingress cert was issued fresh via DNS01 challenge.
+
+### End-to-end verification
+
+```
+$ curl -sI https://argocd.crib.scapegoat.dev/
+HTTP/2 307
+location: /login
+
+$ openssl s_client ... | openssl x509 -noout -subject -issuer
+subject=CN = argocd.crib.scapegoat.dev
+issuer=C = US, O = Let's Encrypt, CN = R13
+```
+
+**Full chain working:** Public internet → `*.crib.scapegoat.dev` DNS (DigitalOcean CNAME) → Tailscale Funnel (TCP passthrough) → Traefik ingress → ArgoCD pod. TLS via Let's Encrypt DNS01 challenge.
+
+## Current State
+
+- ✅ Tailscale Funnel: TCP passthrough 443 → Traefik
+- ✅ DNS: `*.crib.scapegoat.dev → k3s-proxmox.tail879302.ts.net`
+- ✅ Traefik: Running with ingress
+- ✅ Let's Encrypt: `argocd.crib.scapegoat.dev` cert issued via DNS01
+- ✅ ArgoCD: Watching `wesen/crib-k3s` repo, 2 apps synced
+- ✅ `https://argocd.crib.scapegoat.dev/` — publicly accessible with valid TLS
