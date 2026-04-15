@@ -3,6 +3,10 @@ kind: Kustomization
 
 resources:
   - namespace.yaml
-  - digitalocean-secret.yaml
   - clusterissuer.yaml
   - wildcard-certificate.yaml
+
+# The digitalocean-dns secret must be created manually:
+# kubectl create secret generic digitalocean-dns \
+#   --namespace cert-manager \
+#   --from-literal=access-token=<DO_TOKEN>
