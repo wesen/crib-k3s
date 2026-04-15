@@ -14,8 +14,21 @@ spec:
     - hosts:
         - argocd.crib.scapegoat.dev
       secretName: argocd-server-crib-tls
+    - hosts:
+        - k3s-proxmox.tail879302.ts.net
+      secretName: argocd-server-tailscale-tls
   rules:
     - host: argocd.crib.scapegoat.dev
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: argocd-server
+                port:
+                  name: http
+    - host: k3s-proxmox.tail879302.ts.net
       http:
         paths:
           - path: /
