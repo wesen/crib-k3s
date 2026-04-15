@@ -1,0 +1,16 @@
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata:
+  name: traefik
+  namespace: kube-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+spec:
+  valuesContent: |-
+    service:
+      type: NodePort
+    ports:
+      web:
+        hostPort: 80
+      websecure:
+        hostPort: 443
