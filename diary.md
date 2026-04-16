@@ -189,3 +189,182 @@ issuer=C = US, O = Let's Encrypt, CN = R13
 - ✅ Let's Encrypt: `argocd.crib.scapegoat.dev` cert issued via DNS01
 - ✅ ArgoCD: Watching `wesen/crib-k3s` repo, 2 apps synced
 - ✅ `https://argocd.crib.scapegoat.dev/` — publicly accessible with valid TLS
+
+## Step 6: Start the Shared Vault / VSO Investigation
+
+### What happened
+
+We decided not to run a second Vault instance on Proxmox. Instead, we explored reusing the existing Vault from the Hetzner cluster and connecting crib-k3s to it via Vault Secrets Operator (VSO).
+
+### Why this matters
+
+The crib cluster is intentionally small and homelab-ish; duplicating Vault, policies, auth flows, and unseal/seal logic would be unnecessary operational overhead. The Hetzner cluster already has:
+- a running Vault instance
+- a working Kubernetes auth bootstrap flow
+- a Vault Secrets Operator deployment pattern
+- several real policies/roles we can mirror
+
+### What we found
+
+- VSO is just a controller, so it can talk to any Vault endpoint reachable over HTTP(S)
+- Hetzner’s Vault is reachable at `https://vault.yolo.scapegoat.dev`
+- Crib needs its **own** Kubernetes auth mount in Vault, because each cluster has a different service-account token issuer and CA bundle
+- We should keep the token/seal/unseal mechanics centralized in the Hetzner Vault and only deploy VSO in crib
+
+### Documentation work
+
+Created a new docmgr ticket in `crib-k3s`:
+- `shared-vault-vso` — implementation guide for connecting crib-k3s to shared Hetzner Vault via VSO
+
+Wrote a long-form implementation guide there describing:
+- Vault/VSO architecture
+- Kubernetes auth flow
+- policy and role layout
+- how to bootstrap a new auth mount for crib
+- how to migrate the existing manual DigitalOcean DNS secret later
+
+### Key lesson
+
+The right abstraction boundary is:
+- **Vault stays centralized on Hetzner**
+- **crib-k3s gets VSO + auth config only**
+- app secrets remain GitOps-managed as `VaultStaticSecret` CRDs
+
+## Step 7: Package poll-modem for Kubernetes Instead of Just Running the TUI
+
+### What happened
+
+The original poll-modem app was only a TUI. That is fine for an interactive shell session, but not enough for a Kubernetes deployment. To run it in crib-k3s, we added a headless mode that continuously polls the modem, stores samples in SQLite, and serves a small HTTP dashboard.
+
+### New runtime shape
+
+We introduced a new `serve` command that does both jobs:
+1. polls the modem on a timer
+2. exposes:
+   - `/` for a simple dashboard
+   - `/api/status` for JSON
+   - `/healthz` for readiness/liveness checks
+
+### Implementation details
+
+The new server mode uses the existing modem client and SQLite storage layer:
+- `internal/modem/client.go` still handles login, cookies, and parsing
+- `internal/modem/database.go` now supports configurable DB path via `POLL_MODEM_DB_PATH`
+- `cmd/serve.go` wraps polling in a small HTTP server
+
+The result is a single container that can be deployed cleanly by ArgoCD.
+
+### Packaging
+
+Added a Dockerfile and built/pushed the image to GHCR as `ghcr.io/wesen/poll-modem:latest` after refreshing GitHub auth scopes to include `write:packages`.
+
+### Important packaging detail
+
+The container needs CGO because poll-modem uses `go-sqlite3`:
+- `CGO_ENABLED=1`
+- build on a Debian/Bookworm-based builder image
+- ship a slim runtime image
+
+### Why this is better
+
+Instead of trying to run a TUI in Kubernetes, we now have:
+- an actual headless collector for the cluster
+- a small dashboard for human inspection
+- a durable SQLite history file on a PVC
+
+## Step 8: Deploy poll-modem into crib-k3s with ArgoCD
+
+### What happened
+
+Created a new GitOps package in `crib-k3s` for poll-modem:
+- `gitops/applications/poll-modem.yaml`
+- `gitops/kustomize/poll-modem/`
+
+### Resources created
+
+The app now manages:
+- `Namespace` — `poll-modem`
+- `PersistentVolumeClaim` — `poll-modem-data`
+- `Deployment` — runs `poll-modem serve`
+- `Service` — exposes port 80 inside cluster
+- `Ingress` — `modem.crib.scapegoat.dev` via Traefik + cert-manager
+
+### Secrets
+
+The modem credentials are deliberately **not committed**:
+- created manually as `modem-credentials` secret in `poll-modem` namespace
+- credentials used: `admin / aVEnsmMZYG7JCXmitn7t`
+
+### Deployment flow
+
+1. push poll-modem code + GHCR image
+2. push crib-k3s GitOps manifests
+3. let ArgoCD sync the new application
+4. create the manual secret in cluster
+5. wait for ingress TLS certificate issuance
+
+### Why the ingress works now
+
+Because `poll-modem` is now a web app, the Ingress can route to it normally through Traefik. This would not have been possible with the original TUI-only binary.
+
+## Step 9: cert-manager DNS01 Delay and DigitalOcean Rate Limiting
+
+### What happened
+
+The poll-modem TLS secret (`poll-modem-tls`) took longer than expected to issue. We checked cert-manager logs and found the real issue was not Let’s Encrypt, but **DigitalOcean API rate limiting** while cert-manager tried to manage DNS records.
+
+### What the logs showed
+
+- repeated `429 Too many requests` from `api.digitalocean.com`
+- cert-manager retrying DNS01 challenge presentation
+- a stale older challenge for `argocd-server-tailscale-tls` still generating noise
+
+### Root cause
+
+The rate limiting was happening because cert-manager was doing many DNS operations in a short time:
+- creating and checking TXT records for `poll-modem.crib.scapegoat.dev`
+- retrying on failures with backoff
+- still carrying around a stale Tailscale-hostname challenge that should never have used the DigitalOcean DNS solver in the first place
+
+### Cleanup
+
+Removed the stale challenge finalizer and deleted the leftover `argocd-server-tailscale-tls` challenge resource.
+
+That reduced the noise and let the new `poll-modem-tls` issuance proceed more cleanly.
+
+### Lesson
+
+DNS01 certs are usually quick, but when the DNS provider API starts rate-limiting, issuance can stretch from a couple of minutes to much longer. The most important thing is to inspect cert-manager logs and clean up stale orders/challenges instead of just waiting forever.
+
+## Step 10: Makefile and GHCR workflow improvements
+
+### What happened
+
+Added explicit publish targets to poll-modem’s Makefile so container publishing is repeatable:
+- `docker-build`
+- `docker-push`
+- `publish-ghcr`
+
+### Why this helps
+
+This makes the build/release workflow obvious and reproducible for future deploys:
+
+```bash
+make publish-ghcr
+```
+
+### Auth detail
+
+Publishing to GHCR required refreshing GitHub auth scopes to include `write:packages`, then re-logging into Docker with the refreshed token.
+
+## Current State
+
+- ✅ crib-k3s repo is the main GitOps source of truth for the cluster
+- ✅ ArgoCD is managing platform cert-issuer and ArgoCD ingress
+- ✅ poll-modem is deployed as a web app in crib-k3s
+- ✅ poll-modem code now has a `serve` mode and GHCR image
+- ✅ modem dashboard is exposed at `modem.crib.scapegoat.dev`
+- ✅ shared Vault/VSO plan documented in a separate docmgr ticket
+- ✅ stale cert-manager Tailscale challenge cleaned up
+- ⏳ poll-modem TLS still depends on cert-manager finishing the DNS01 flow cleanly
+- ⏳ next likely cleanup: move more of the manual platform secrets into Vault/VSO once that investigation is implemented
