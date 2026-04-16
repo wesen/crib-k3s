@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: poll-modem
-          image: ghcr.io/wesen/poll-modem:latest
+          image: ghcr.io/wesen/poll-modem:8a80fbd
           imagePullPolicy: IfNotPresent
           args:
             - serve

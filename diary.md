@@ -452,3 +452,30 @@ The local machine does **not** have the `argocd` CLI installed, so I created the
 - The monitoring stack is intentionally minimal at first
 - I am keeping Grafana internal for the moment; if I expose it publicly later, I’ll reuse the same wildcard TLS approach used for poll-modem
 - I still want to verify the exact scrape target and then decide whether Grafana needs its own ingress route or can stay reachable via port-forward initially
+
+## Step 13: Pin poll-modem to the metrics-enabled image
+
+### What happened
+
+Prometheus found the poll-modem target, but the pod was still running the older image without the new `/metrics` handler. The symptom was that the scrape endpoint returned HTML from `/` instead of Prometheus text format.
+
+I fixed that by:
+
+1. building a fresh poll-modem container image from the metrics commit
+2. pushing it to GHCR as `ghcr.io/wesen/poll-modem:8a80fbd`
+3. pinning the crib-k3s deployment to that exact tag instead of the cached `latest`
+
+### Why this mattered
+
+The deployment was using:
+
+```yaml
+image: ghcr.io/wesen/poll-modem:latest
+imagePullPolicy: IfNotPresent
+```
+
+That combination is fine for quick demos, but it is not reliable when the image contents change and the node already has an older `latest` cached locally.
+
+### Result
+
+Once the deployment points at the new tag, the pod will restart with the metrics-enabled binary and Prometheus should be able to scrape the `/metrics` endpoint successfully.
