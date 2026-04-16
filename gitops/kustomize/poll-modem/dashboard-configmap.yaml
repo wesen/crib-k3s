@@ -1,0 +1,323 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: poll-modem-grafana-dashboard
+  namespace: poll-modem
+  labels:
+    grafana_dashboard: "1"
+    app: poll-modem
+    dashboard: poll-modem
+  annotations:
+    grafana_folder: Poll Modem
+    grafana_uid: poll-modem-overview
+data:
+  poll-modem-dashboard.json: |
+    {
+      "annotations": {
+        "list": [
+          {
+            "builtIn": 1,
+            "datasource": {
+              "type": "grafana",
+              "uid": "grafana"
+            },
+            "enable": true,
+            "hide": true,
+            "iconColor": "rgba(0, 211, 255, 1)",
+            "name": "Annotations & Alerts",
+            "target": {
+              "limit": 100,
+              "matchAny": false,
+              "tags": [],
+              "type": "dashboard"
+            },
+            "type": "dashboard"
+          }
+        ]
+      },
+      "editable": false,
+      "fiscalYearStartMonth": 0,
+      "graphTooltip": 1,
+      "id": null,
+      "links": [],
+      "liveNow": false,
+      "panels": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "mappings": [
+                {
+                  "options": {
+                    "0": { "color": "red", "index": 0, "text": "Down" },
+                    "1": { "color": "green", "index": 1, "text": "Up" }
+                  },
+                  "type": "value"
+                }
+              ],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "red", "value": null },
+                  { "color": "green", "value": 1 }
+                ]
+              },
+              "unit": "none"
+            },
+            "overrides": []
+          },
+          "gridPos": { "h": 5, "w": 4, "x": 0, "y": 0 },
+          "id": 1,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "orientation": "horizontal",
+            "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+            "textMode": "auto"
+          },
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
+              "expr": "poll_modem_up",
+              "refId": "A"
+            }
+          ],
+          "title": "Collector Up",
+          "type": "stat"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": { "decimals": 0, "unit": "s" },
+            "overrides": []
+          },
+          "gridPos": { "h": 5, "w": 5, "x": 4, "y": 0 },
+          "id": 2,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "horizontal",
+            "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+            "textMode": "auto"
+          },
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
+              "expr": "time() - poll_modem_last_success_unixtime",
+              "legendFormat": "age",
+              "refId": "A"
+            }
+          ],
+          "title": "Age Since Last Success",
+          "type": "stat"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": { "decimals": 0, "unit": "s" },
+            "overrides": []
+          },
+          "gridPos": { "h": 5, "w": 5, "x": 9, "y": 0 },
+          "id": 3,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "horizontal",
+            "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+            "textMode": "auto"
+          },
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
+              "expr": "time() - poll_modem_last_failure_unixtime",
+              "legendFormat": "age",
+              "refId": "A"
+            }
+          ],
+          "title": "Age Since Last Failure",
+          "type": "stat"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": { "unit": "dB" },
+            "overrides": []
+          },
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 5 },
+          "id": 4,
+          "options": {
+            "legend": { "displayMode": "table", "placement": "right", "showLegend": true },
+            "tooltip": { "mode": "single" }
+          },
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
+              "expr": "poll_modem_downstream_snr_db",
+              "legendFormat": "ch {{channel_id}}",
+              "refId": "A"
+            }
+          ],
+          "title": "Downstream SNR (dB)",
+          "type": "timeseries"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": { "unit": "short" },
+            "overrides": []
+          },
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 5 },
+          "id": 5,
+          "options": {
+            "legend": { "displayMode": "table", "placement": "right", "showLegend": true },
+            "tooltip": { "mode": "single" }
+          },
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
+              "expr": "poll_modem_downstream_power_dbmv",
+              "legendFormat": "down ch {{channel_id}}",
+              "refId": "A"
+            },
+            {
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
+              "expr": "poll_modem_upstream_power_dbmv",
+              "legendFormat": "up ch {{channel_id}}",
+              "refId": "B"
+            }
+          ],
+          "title": "Channel Power (dBmV)",
+          "type": "timeseries"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": { "unit": "hertz" },
+            "overrides": []
+          },
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 13 },
+          "id": 6,
+          "options": {
+            "legend": { "displayMode": "table", "placement": "right", "showLegend": true },
+            "tooltip": { "mode": "single" }
+          },
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
+              "expr": "poll_modem_downstream_frequency_hz",
+              "legendFormat": "down ch {{channel_id}}",
+              "refId": "A"
+            },
+            {
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
+              "expr": "poll_modem_upstream_frequency_hz",
+              "legendFormat": "up ch {{channel_id}}",
+              "refId": "B"
+            }
+          ],
+          "title": "Channel Frequency (Hz)",
+          "type": "timeseries"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": { "unit": "short" },
+            "overrides": []
+          },
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 13 },
+          "id": 7,
+          "options": {
+            "legend": { "displayMode": "table", "placement": "right", "showLegend": true },
+            "tooltip": { "mode": "single" }
+          },
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
+              "expr": "poll_modem_upstream_symbol_rate_sps",
+              "legendFormat": "up ch {{channel_id}}",
+              "refId": "A"
+            }
+          ],
+          "title": "Upstream Symbol Rate (sym/s)",
+          "type": "timeseries"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": { "unit": "none" },
+            "overrides": []
+          },
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 21 },
+          "id": 8,
+          "options": {
+            "legend": { "displayMode": "table", "placement": "right", "showLegend": true },
+            "tooltip": { "mode": "single" }
+          },
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
+              "expr": "poll_modem_downstream_locked",
+              "legendFormat": "down ch {{channel_id}}",
+              "refId": "A"
+            },
+            {
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
+              "expr": "poll_modem_upstream_locked",
+              "legendFormat": "up ch {{channel_id}}",
+              "refId": "B"
+            }
+          ],
+          "title": "Channel Lock State",
+          "type": "timeseries"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": { "unit": "short" },
+            "overrides": []
+          },
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 21 },
+          "id": 9,
+          "options": {
+            "legend": { "displayMode": "table", "placement": "right", "showLegend": true },
+            "tooltip": { "mode": "single" }
+          },
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
+              "expr": "poll_modem_error_correctable_codewords",
+              "legendFormat": "correctable ch {{channel_id}}",
+              "refId": "A"
+            },
+            {
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
+              "expr": "poll_modem_error_uncorrectable_codewords",
+              "legendFormat": "uncorrectable ch {{channel_id}}",
+              "refId": "B"
+            },
+            {
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
+              "expr": "poll_modem_error_unerrored_codewords",
+              "legendFormat": "unerrored ch {{channel_id}}",
+              "refId": "C"
+            }
+          ],
+          "title": "Error Codewords",
+          "type": "timeseries"
+        }
+      ],
+      "refresh": "30s",
+      "schemaVersion": 39,
+      "style": "dark",
+      "tags": ["poll-modem", "crib-k3s", "monitoring"],
+      "templating": { "list": [] },
+      "time": { "from": "now-6h", "to": "now" },
+      "timezone": "browser",
+      "title": "poll-modem / Signal Overview",
+      "uid": "poll-modem-overview",
+      "version": 1,
+      "weekStart": ""
+    }

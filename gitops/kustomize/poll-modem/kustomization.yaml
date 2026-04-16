@@ -9,6 +9,7 @@ resources:
   - deployment.yaml
   - service.yaml
   - servicemonitor.yaml
+  - dashboard-configmap.yaml
   - ingress.yaml
 
 # Create the modem credentials secret manually, not in git:
