@@ -3,6 +3,8 @@ kind: Service
 metadata:
   name: poll-modem
   namespace: poll-modem
+  labels:
+    app: poll-modem
 spec:
   selector:
     app: poll-modem

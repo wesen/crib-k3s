@@ -8,6 +8,7 @@ resources:
   - pvc.yaml
   - deployment.yaml
   - service.yaml
+  - servicemonitor.yaml
   - ingress.yaml
 
 # Create the modem credentials secret manually, not in git:

@@ -419,3 +419,36 @@ curl -skI https://modem.crib.scapegoat.dev/
 - cert-manager is fine, but DNS01 + provider API rate limits can get noisy fast
 - if a wildcard cert already exists, prefer reusing it instead of creating one per app
 - Traefik `IngressRoute` is a good escape hatch when you want to avoid cert-manager ingress-shim entirely
+
+## Step 12: Start the poll-modem Monitoring Stack
+
+### What happened
+
+I split the monitoring work into two parts:
+
+1. app-side instrumentation in `poll-modem`
+2. cluster-side scrape/visualization in `crib-k3s`
+
+The app instrumentation is now committed separately, and the crib repo now contains:
+
+- a `ServiceMonitor` for `poll-modem`
+- an ArgoCD Application for `kube-prometheus-stack`
+
+### Key operational note
+
+The local machine does **not** have the `argocd` CLI installed, so I created the ArgoCD `Application` resource with `kubectl apply` instead. That still keeps the workflow GitOps-native; ArgoCD will reconcile the Helm chart itself.
+
+### Current monitoring stack shape
+
+- `poll-modem` exports `/metrics`
+- the `poll-modem` Service now has a stable label for the monitor selector
+- the `poll-modem` namespace contains a `ServiceMonitor`
+- ArgoCD has a new `monitoring` application pointing at `kube-prometheus-stack`
+- Prometheus is configured to watch `ServiceMonitor` objects cluster-wide
+- Grafana is enabled in the stack and will be used for dashboards once the repo changes are pushed and the app settles
+
+### Notes / caveats
+
+- The monitoring stack is intentionally minimal at first
+- I am keeping Grafana internal for the moment; if I expose it publicly later, I’ll reuse the same wildcard TLS approach used for poll-modem
+- I still want to verify the exact scrape target and then decide whether Grafana needs its own ingress route or can stay reachable via port-forward initially
