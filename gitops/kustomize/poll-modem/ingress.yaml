@@ -10,7 +10,7 @@ spec:
   tls:
     - hosts:
         - modem.crib.scapegoat.dev
-      secretName: poll-modem-tls
+      secretName: crib-scapegoat-dev-tls
   rules:
     - host: modem.crib.scapegoat.dev
       http:
