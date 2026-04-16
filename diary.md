@@ -535,3 +535,55 @@ The deployment is now being repinned to the corrected image tag, which should fi
 - a running poll-modem pod
 - a live `/metrics` endpoint
 - a Prometheus scrape target that returns Prometheus text format instead of HTML
+
+## Step 16: End-to-end validation
+
+### What happened
+
+After the registry fix and the deployment repin, I revalidated the full chain:
+
+- poll-modem pod is running the metrics-enabled image
+- `/metrics` returns Prometheus text format
+- Prometheus has an active `up{job="poll-modem"}` series with value `1`
+- the monitoring app is Healthy
+- the poll-modem app is Healthy
+
+### Direct checks
+
+```bash
+curl -s http://127.0.0.1:18080/metrics | head -20
+# Prometheus text exposition output
+
+kubectl get application poll-modem -n argocd -o wide
+# SYNC STATUS: Synced
+# HEALTH STATUS: Healthy
+
+kubectl get application monitoring -n argocd -o wide
+# SYNC STATUS: Synced
+# HEALTH STATUS: Healthy
+```
+
+### Prometheus query result
+
+```json
+{
+  "metric": {
+    "__name__": "up",
+    "job": "poll-modem",
+    "namespace": "poll-modem",
+    "service": "poll-modem"
+  },
+  "value": [
+    1776303394.043,
+    "1"
+  ]
+}
+```
+
+### Outcome
+
+This closes the loop for the observability work:
+
+- app metrics are exported
+- Prometheus scrapes them
+- Grafana is deployed and ready to query Prometheus

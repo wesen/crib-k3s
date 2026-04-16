@@ -20,6 +20,8 @@ RelatedFiles:
       Note: Prometheus client dependency
     - Path: gitops/applications/monitoring.yaml
       Note: ArgoCD Application for kube-prometheus-stack monitoring stack
+    - Path: gitops/kustomize/poll-modem/deployment.yaml
+      Note: Pin poll-modem to the metrics-enabled image tag and GHCR pull secret
     - Path: gitops/kustomize/poll-modem/service.yaml
       Note: Service label required for ServiceMonitor selection
     - Path: gitops/kustomize/poll-modem/servicemonitor.yaml
@@ -30,6 +32,7 @@ LastUpdated: 2026-04-15T21:12:44.591281559-04:00
 WhatFor: ""
 WhenToUse: ""
 ---
+
 
 
 # Add Prometheus metrics and Grafana for poll-modem

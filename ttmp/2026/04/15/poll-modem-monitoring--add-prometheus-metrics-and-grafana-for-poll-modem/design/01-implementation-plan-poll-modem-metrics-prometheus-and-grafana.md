@@ -18,6 +18,8 @@ RelatedFiles:
       Note: HTTP route for /metrics and poll success/failure instrumentation
     - Path: gitops/applications/monitoring.yaml
       Note: ArgoCD-managed kube-prometheus-stack deployment
+    - Path: gitops/kustomize/poll-modem/deployment.yaml
+      Note: Deployment pin to the metrics-enabled image and imagePullSecret
     - Path: gitops/kustomize/poll-modem/servicemonitor.yaml
       Note: Kubernetes scrape target for poll-modem
 ExternalSources: []
@@ -26,6 +28,7 @@ LastUpdated: 2026-04-15T21:13:01.241479621-04:00
 WhatFor: ""
 WhenToUse: ""
 ---
+
 
 
 # Implementation Plan: poll-modem Metrics, Prometheus, and Grafana
