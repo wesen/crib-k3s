@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: poll-modem
+  namespace: poll-modem
+  labels:
+    app: poll-modem
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: poll-modem
+  template:
+    metadata:
+      labels:
+        app: poll-modem
+    spec:
+      containers:
+        - name: poll-modem
+          image: ghcr.io/wesen/poll-modem:latest
+          imagePullPolicy: IfNotPresent
+          args:
+            - serve
+            - --listen=:8080
+            - --url=http://192.168.0.1
+            - --interval=60s
+          env:
+            - name: MODEM_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: modem-credentials
+                  key: username
+            - name: MODEM_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: modem-credentials
+                  key: password
+            - name: POLL_MODEM_DB_PATH
+              value: /data/history.db
+          ports:
+            - containerPort: 8080
+              name: http
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: poll-modem-data
