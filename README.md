@@ -39,6 +39,9 @@ gitops/
 └── kustomize/
     ├── platform-cert-issuer/      # cert-manager config
     └── argocd-crib/              # ArgoCD public access
+
+docs/
+└── playbooks/                     # Operational runbooks and troubleshooting guides
 ```
 
 ## Bootstrapping a new VM
@@ -70,6 +73,11 @@ ssh ubuntu@k3s-proxmox "sudo tailscale funnel --bg --tcp 443 127.0.0.1:443"
 ## DNS changes
 
 DNS is managed via Terraform at `~/code/wesen/terraform/dns/zones/scapegoat-dev/envs/prod/`.
+
+## Docs
+
+- `docs/README.md` — overview of the runbook set
+- `docs/playbooks/README.md` — index of the operational playbooks
 
 ## Related
 
