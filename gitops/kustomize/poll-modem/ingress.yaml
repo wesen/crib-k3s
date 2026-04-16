@@ -3,8 +3,6 @@ kind: Ingress
 metadata:
   name: poll-modem
   namespace: poll-modem
-  annotations:
-    cert-manager.io/cluster-issuer: letsencrypt-prod
 spec:
   ingressClassName: traefik
   tls:
