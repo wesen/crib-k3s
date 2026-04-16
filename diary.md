@@ -661,3 +661,43 @@ The ConfigMap now exists in the cluster and Prometheus is seeing the signal metr
 ### Operational note
 
 I kept the dashboard ConfigMap in the app namespace so it travels with the app overlay instead of living as a separate monitoring-only artifact.
+
+## Step 19: Expose Grafana publicly
+
+### What changed
+
+I exposed Grafana at `https://grafana.crib.scapegoat.dev/` using a dedicated ArgoCD app and a Traefik `IngressRoute`.
+
+### Implementation details
+
+- created `gitops/applications/grafana-crib.yaml`
+- created `gitops/kustomize/grafana-crib/`
+- copied the shared wildcard TLS secret into the `monitoring` namespace
+- pointed the route at the existing `monitoring-grafana` service on port 80
+
+### Validation
+
+- `curl -skI https://grafana.crib.scapegoat.dev/` returns `302 /login`
+- the Grafana app is `Synced` and `Healthy`
+- the TLS secret exists in the `monitoring` namespace
+
+## Step 20: Add a downstream signal trends dashboard
+
+### What changed
+
+I added a second Grafana dashboard focused on downstream signal quality:
+
+- downstream SNR by channel
+- downstream power by channel
+- downstream frequency by channel
+
+The dashboard lives in the poll-modem overlay and is discovered by the Grafana sidecar through the `grafana_dashboard=1` label.
+
+### Validation
+
+Grafana’s search API now returns both dashboards:
+
+- `poll-modem / Signal Overview`
+- `poll-modem / Downstream Signal Trends`
+
+This gives us the broad health dashboard and a second, signal-focused dashboard for investigating SNR and power trends over time.
