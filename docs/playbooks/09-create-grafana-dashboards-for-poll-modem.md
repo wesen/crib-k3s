@@ -83,6 +83,8 @@ poll_modem_downstream_snr_db
 avg(avg_over_time(poll_modem_downstream_snr_db[1h]))
 ```
 
+This query is intended for the **Average Downstream SNR (1h)** time-series panel on the downstream signal trends dashboard.
+
 ### Channel power
 
 ```promql

@@ -717,3 +717,19 @@ avg(avg_over_time(poll_modem_downstream_snr_db[1h]))
 ### Why
 
 This makes the stat much more useful for spotting slow degradation or sustained recovery in SNR without being too jumpy from a single poll.
+
+## Step 22: Turn the 1h average SNR panel into a timeline
+
+### What changed
+
+The "Average Downstream SNR (1h)" panel on the downstream signal trends dashboard is now a time-series chart instead of a stat tile.
+
+### Query shape
+
+```promql
+avg(avg_over_time(poll_modem_downstream_snr_db[1h]))
+```
+
+### Why
+
+The line chart makes the rolling average easier to interpret over time, especially when you want to see gradual signal drift instead of only the latest average value.

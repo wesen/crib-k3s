@@ -37,28 +37,36 @@ data:
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
           "fieldConfig": {
-            "defaults": { "unit": "dB" },
+            "defaults": {
+              "unit": "dB",
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 10,
+                "showPoints": "never"
+              }
+            },
             "overrides": []
           },
           "gridPos": { "h": 6, "w": 6, "x": 0, "y": 0 },
           "id": 1,
           "options": {
-            "colorMode": "value",
-            "graphMode": "none",
-            "justifyMode": "auto",
-            "orientation": "horizontal",
-            "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-            "textMode": "auto"
+            "legend": {
+              "displayMode": "hidden",
+              "placement": "bottom",
+              "showLegend": false
+            },
+            "tooltip": { "mode": "single", "sort": "none" }
           },
           "targets": [
             {
               "datasource": { "type": "prometheus", "uid": "prometheus" },
               "expr": "avg(avg_over_time(poll_modem_downstream_snr_db[1h]))",
+              "legendFormat": "1h avg",
               "refId": "A"
             }
           ],
           "title": "Average Downstream SNR (1h)",
-          "type": "stat"
+          "type": "timeseries"
         },
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
