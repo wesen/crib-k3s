@@ -368,3 +368,54 @@ Publishing to GHCR required refreshing GitHub auth scopes to include `write:pack
 - ✅ stale cert-manager Tailscale challenge cleaned up
 - ⏳ poll-modem TLS still depends on cert-manager finishing the DNS01 flow cleanly
 - ⏳ next likely cleanup: move more of the manual platform secrets into Vault/VSO once that investigation is implemented
+
+## Step 11: Throttle cert-manager and Remove poll-modem DNS01 Churn
+
+### What happened
+
+The poll-modem certificate kept retrying against DigitalOcean and causing 429s. I throttled cert-manager and removed the poll-modem DNS01 path entirely by switching `modem.crib.scapegoat.dev` from a standard Kubernetes `Ingress` to a Traefik `IngressRoute`.
+
+### Throttling change
+
+The cert-manager controller in crib was patched from:
+
+```bash
+--max-concurrent-challenges=60
+```
+
+to:
+
+```bash
+--max-concurrent-challenges=1
+```
+
+This reduces the number of active DNS01 challenges cert-manager will process at once.
+
+### poll-modem TLS simplification
+
+I stopped asking cert-manager to issue a per-service cert for poll-modem and instead reused the existing wildcard cert already issued for `*.crib.scapegoat.dev`:
+
+- copied `crib-scapegoat-dev-tls` into the `poll-modem` namespace
+- changed the service exposure from standard `Ingress` to Traefik `IngressRoute`
+- removed the cert-manager annotation from the poll-modem ingress path
+
+That means:
+- no more new poll-modem `Certificate`/`Order`/`Challenge` objects
+- no more DigitalOcean DNS API hammering from poll-modem
+- Traefik still serves `https://modem.crib.scapegoat.dev/` using the wildcard cert
+
+### Verification
+
+```bash
+kubectl get certificate,order,challenge -n poll-modem
+# No resources found
+
+curl -skI https://modem.crib.scapegoat.dev/
+# HTTP/2 200
+```
+
+### Lessons
+
+- cert-manager is fine, but DNS01 + provider API rate limits can get noisy fast
+- if a wildcard cert already exists, prefer reusing it instead of creating one per app
+- Traefik `IngressRoute` is a good escape hatch when you want to avoid cert-manager ingress-shim entirely
