@@ -13,13 +13,21 @@ Intent: long-term
 Owners: []
 RelatedFiles:
     - Path: ../../../../../../corporate-headquarters/poll-modem/cmd/metrics.go
-      Note: Prometheus metric definitions and collectors for poll-modem
+      Note: |-
+        Prometheus metric definitions and collectors for poll-modem
+        Rich Prometheus signal metrics and per-channel gauges
+    - Path: ../../../../../../corporate-headquarters/poll-modem/cmd/metrics_test.go
+      Note: Parsing and lock-state normalization tests
     - Path: ../../../../../../corporate-headquarters/poll-modem/cmd/serve.go
       Note: /metrics handler and poll instrumentation wiring
     - Path: ../../../../../../corporate-headquarters/poll-modem/go.mod
       Note: Prometheus client dependency
+    - Path: docs/playbooks/09-create-grafana-dashboards-for-poll-modem.md
+      Note: Grafana dashboard playbook for poll-modem signal metrics
     - Path: gitops/applications/monitoring.yaml
       Note: ArgoCD Application for kube-prometheus-stack monitoring stack
+    - Path: gitops/kustomize/poll-modem/dashboard-configmap.yaml
+      Note: Grafana dashboard ConfigMap for modem signal panels
     - Path: gitops/kustomize/poll-modem/deployment.yaml
       Note: Pin poll-modem to the metrics-enabled image tag and GHCR pull secret
     - Path: gitops/kustomize/poll-modem/service.yaml
@@ -32,6 +40,8 @@ LastUpdated: 2026-04-15T21:12:44.591281559-04:00
 WhatFor: ""
 WhenToUse: ""
 ---
+
+
 
 
 

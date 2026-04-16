@@ -13,6 +13,8 @@ Each playbook is intended to be practical and reusable. If you are doing a relat
 5. [Manage GHCR images and pull secrets](./05-manage-ghcr-images-and-pull-secrets.md)
 6. [Recover from cert-manager DigitalOcean 429s](./06-recover-from-cert-manager-digitalocean-429s.md)
 7. [Troubleshoot monitoring rollouts](./07-troubleshoot-monitoring-rollouts.md)
+8. [Provision and observe poll-modem](./08-provision-and-observe-poll-modem.md)
+9. [Create Grafana dashboards for poll-modem](./09-create-grafana-dashboards-for-poll-modem.md)
 
 ## Writing style
 

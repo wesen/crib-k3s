@@ -13,11 +13,23 @@ Intent: long-term
 Owners: []
 RelatedFiles:
     - Path: ../../../../../../../corporate-headquarters/poll-modem/cmd/metrics.go
-      Note: Implementation of Prometheus counters
+      Note: |-
+        Implementation of Prometheus counters
+        Signal-metric registry and parsing helpers
+    - Path: ../../../../../../../corporate-headquarters/poll-modem/cmd/metrics_test.go
+      Note: Unit tests for numeric parsing and lock states
     - Path: ../../../../../../../corporate-headquarters/poll-modem/cmd/serve.go
       Note: HTTP route for /metrics and poll success/failure instrumentation
+    - Path: cmd/metrics_test.go
+      Note: Unit tests for measurement parsing and lock-state normalization
+    - Path: docs/playbooks/09-create-grafana-dashboards-for-poll-modem.md
+      Note: Runbook for the Grafana dashboard build and load process
     - Path: gitops/applications/monitoring.yaml
       Note: ArgoCD-managed kube-prometheus-stack deployment
+    - Path: gitops/kustomize/poll-modem/dashboard-configmap.yaml
+      Note: |-
+        Grafana dashboard ConfigMap for poll-modem signal metrics
+        Grafana dashboard manifest for signal plots
     - Path: gitops/kustomize/poll-modem/deployment.yaml
       Note: Deployment pin to the metrics-enabled image and imagePullSecret
     - Path: gitops/kustomize/poll-modem/servicemonitor.yaml
@@ -28,6 +40,8 @@ LastUpdated: 2026-04-15T21:13:01.241479621-04:00
 WhatFor: ""
 WhenToUse: ""
 ---
+
+
 
 
 
@@ -134,6 +148,34 @@ Recommended metrics:
 
 Also keep the default Go/process collectors enabled so we get memory/GC/CPU trends for free.
 
+### Add channel-level signal metrics
+
+Expose the modem’s actual signal data as gauges so Grafana can plot it over time.
+
+Recommended metric families:
+
+| Metric | Type | Purpose |
+|--------|------|---------|
+| `poll_modem_downstream_snr_db{channel_id="..."}` | gauge | downstream SNR per channel |
+| `poll_modem_downstream_power_dbmv{channel_id="..."}` | gauge | downstream power per channel |
+| `poll_modem_downstream_frequency_hz{channel_id="..."}` | gauge | downstream frequency per channel |
+| `poll_modem_downstream_locked{channel_id="..."}` | gauge | downstream lock state as 1/0 |
+| `poll_modem_upstream_power_dbmv{channel_id="..."}` | gauge | upstream power per channel |
+| `poll_modem_upstream_frequency_hz{channel_id="..."}` | gauge | upstream frequency per channel |
+| `poll_modem_upstream_symbol_rate_sps{channel_id="..."}` | gauge | upstream symbol rate per channel |
+| `poll_modem_upstream_locked{channel_id="..."}` | gauge | upstream lock state as 1/0 |
+| `poll_modem_error_unerrored_codewords{channel_id="..."}` | gauge | unerrored codewords per channel |
+| `poll_modem_error_correctable_codewords{channel_id="..."}` | gauge | correctable codewords per channel |
+| `poll_modem_error_uncorrectable_codewords{channel_id="..."}` | gauge | uncorrectable codewords per channel |
+
+Implementation notes:
+
+- keep labels low-cardinality: only `channel_id` for the signal series
+- normalize frequencies to hertz and symbol rates to symbols/second
+- normalize lock status to numeric 1/0 values
+- reset the per-channel vectors on each successful poll so stale labels do not linger when the modem layout changes
+- keep the time-series sample interval tied to the existing poll interval unless the modem needs a shorter cadence
+
 ### Instrument the polling loop
 
 The polling flow should update metrics on both success and failure:
@@ -217,8 +259,9 @@ The simplest first-pass access strategy is:
 ### Step D — dashboarding
 
 1. Create a poll-modem dashboard in Grafana
-2. Add panels for polling health, signal quality, and error growth
-3. Save dashboard JSON to the repo only if it is stable and reusable
+2. Add top-row stat panels for collector health and age since last success/failure
+3. Add time-series panels for downstream SNR, downstream power, upstream power, frequency, symbol rate, and error-codeword growth
+4. Save dashboard JSON to the repo only if it is stable and reusable
 
 ## Validation checklist
 

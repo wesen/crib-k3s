@@ -32,6 +32,8 @@ Start with the playbook that matches the task you want to do. Each playbook is w
 - `docs/playbooks/05-manage-ghcr-images-and-pull-secrets.md` — build/push private images and let k8s pull them
 - `docs/playbooks/06-recover-from-cert-manager-digitalocean-429s.md` — avoid or recover from DNS01 rate limits
 - `docs/playbooks/07-troubleshoot-monitoring-rollouts.md` — debug operator/webhook and scrape issues
+- `docs/playbooks/08-provision-and-observe-poll-modem.md` — full end-to-end poll-modem observability flow
+- `docs/playbooks/09-create-grafana-dashboards-for-poll-modem.md` — build and load Grafana dashboards for modem signal metrics
 
 ## Related repo areas
 
