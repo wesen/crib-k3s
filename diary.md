@@ -507,3 +507,31 @@ imagePullSecrets:
 - the secret stays out of git
 - the deployment manifest only references the secret name
 - the change keeps the cluster reproducible without depending on an accidental node-local image cache
+
+## Step 15: Fix the metrics collector crash and repin again
+
+### What happened
+
+The first metrics-enabled image successfully started pulling, but the process crashed immediately with:
+
+```text
+panic: duplicate metrics collector registration attempted
+```
+
+That came from registering Prometheus collectors against the default registry more than once.
+
+### Fix
+
+I changed the app to use its own Prometheus registry and serve `/metrics` from that registry with `promhttp.HandlerFor(...)`.
+
+I then rebuilt and pushed a new image tag:
+
+- `ghcr.io/wesen/poll-modem:18063a2`
+
+### Result
+
+The deployment is now being repinned to the corrected image tag, which should finally give us:
+
+- a running poll-modem pod
+- a live `/metrics` endpoint
+- a Prometheus scrape target that returns Prometheus text format instead of HTML
