@@ -40,7 +40,12 @@ The ConfigMap carries:
 
 Keep the first dashboard simple and operational.
 
-Recommended panels:
+The repo now ships with two dashboards:
+
+1. an overview dashboard for health, timing, and channel counts
+2. a downstream signal trends dashboard for SNR and power plots
+
+Recommended panels for the overview dashboard:
 
 - collector health
 - age since last success
@@ -142,6 +147,7 @@ Port-forward Grafana or use the existing ingress path and confirm the dashboard 
 - ConfigMap has `grafana_dashboard=1`
 - Grafana sidecar logs show the dashboard was loaded
 - Dashboard appears in Grafana
+- the downstream signal trends dashboard appears too
 - panels render without datasource errors
 
 ## Common failure modes

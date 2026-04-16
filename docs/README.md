@@ -34,6 +34,7 @@ Start with the playbook that matches the task you want to do. Each playbook is w
 - `docs/playbooks/07-troubleshoot-monitoring-rollouts.md` — debug operator/webhook and scrape issues
 - `docs/playbooks/08-provision-and-observe-poll-modem.md` — full end-to-end poll-modem observability flow
 - `docs/playbooks/09-create-grafana-dashboards-for-poll-modem.md` — build and load Grafana dashboards for modem signal metrics
+- `docs/playbooks/10-expose-grafana-via-traefik.md` — publish Grafana at `grafana.crib.scapegoat.dev`
 
 ## Related repo areas
 

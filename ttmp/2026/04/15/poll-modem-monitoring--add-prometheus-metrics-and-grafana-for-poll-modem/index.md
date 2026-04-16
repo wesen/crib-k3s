@@ -24,12 +24,20 @@ RelatedFiles:
       Note: Prometheus client dependency
     - Path: docs/playbooks/09-create-grafana-dashboards-for-poll-modem.md
       Note: Grafana dashboard playbook for poll-modem signal metrics
+    - Path: docs/playbooks/10-expose-grafana-via-traefik.md
+      Note: Grafana exposure runbook
+    - Path: gitops/applications/grafana-crib.yaml
+      Note: ArgoCD Application for Grafana ingress exposure
     - Path: gitops/applications/monitoring.yaml
       Note: ArgoCD Application for kube-prometheus-stack monitoring stack
+    - Path: gitops/kustomize/grafana-crib/ingressroute.yaml
+      Note: Traefik IngressRoute for grafana.crib.scapegoat.dev
     - Path: gitops/kustomize/poll-modem/dashboard-configmap.yaml
       Note: Grafana dashboard ConfigMap for modem signal panels
     - Path: gitops/kustomize/poll-modem/deployment.yaml
       Note: Pin poll-modem to the metrics-enabled image tag and GHCR pull secret
+    - Path: gitops/kustomize/poll-modem/downstream-signal-dashboard-configmap.yaml
+      Note: Downstream SNR and power trends dashboard
     - Path: gitops/kustomize/poll-modem/service.yaml
       Note: Service label required for ServiceMonitor selection
     - Path: gitops/kustomize/poll-modem/servicemonitor.yaml
@@ -40,6 +48,7 @@ LastUpdated: 2026-04-15T21:12:44.591281559-04:00
 WhatFor: ""
 WhenToUse: ""
 ---
+
 
 
 

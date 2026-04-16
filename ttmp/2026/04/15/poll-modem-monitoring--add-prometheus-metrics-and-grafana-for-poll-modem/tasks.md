@@ -12,3 +12,7 @@
 - [ ] Export per-channel error-codeword gauges so Grafana can plot error growth over time
 - [ ] Add a Grafana dashboard ConfigMap for poll-modem signal-quality panels
 - [ ] Validate Prometheus scrape targets and Grafana panels with the new modem metrics
+- [ ] Expose Grafana at grafana.crib.scapegoat.dev via Traefik IngressRoute
+- [ ] Copy the wildcard TLS secret into the monitoring namespace for Grafana TLS
+- [ ] Add a second poll-modem dashboard focused on downstream SNR and power trends
+- [ ] Validate Grafana loads the new dashboards and serves the public ingress

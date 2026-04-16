@@ -24,14 +24,20 @@ RelatedFiles:
       Note: Unit tests for measurement parsing and lock-state normalization
     - Path: docs/playbooks/09-create-grafana-dashboards-for-poll-modem.md
       Note: Runbook for the Grafana dashboard build and load process
+    - Path: gitops/applications/grafana-crib.yaml
+      Note: ArgoCD Grafana ingress app
     - Path: gitops/applications/monitoring.yaml
       Note: ArgoCD-managed kube-prometheus-stack deployment
+    - Path: gitops/kustomize/grafana-crib/ingressroute.yaml
+      Note: Grafana Traefik IngressRoute
     - Path: gitops/kustomize/poll-modem/dashboard-configmap.yaml
       Note: |-
         Grafana dashboard ConfigMap for poll-modem signal metrics
         Grafana dashboard manifest for signal plots
     - Path: gitops/kustomize/poll-modem/deployment.yaml
       Note: Deployment pin to the metrics-enabled image and imagePullSecret
+    - Path: gitops/kustomize/poll-modem/downstream-signal-dashboard-configmap.yaml
+      Note: Downstream signal trends dashboard
     - Path: gitops/kustomize/poll-modem/servicemonitor.yaml
       Note: Kubernetes scrape target for poll-modem
 ExternalSources: []
@@ -40,6 +46,7 @@ LastUpdated: 2026-04-15T21:13:01.241479621-04:00
 WhatFor: ""
 WhenToUse: ""
 ---
+
 
 
 
@@ -126,6 +133,19 @@ Important constraint:
 ### Phase 4: Add Grafana access
 
 Once Prometheus is scraping, add a Grafana access path so dashboards can be viewed through the same crib access model.
+
+This should expose Grafana at `grafana.crib.scapegoat.dev` behind Traefik, using the shared wildcard TLS secret copied into the `monitoring` namespace.
+
+### Phase 5: Add signal-focused dashboards
+
+Create a second dashboard focused on downstream signal trends:
+
+- downstream SNR by channel
+- downstream power by channel
+- downstream frequency by channel
+- downstream lock state by channel
+
+Keep the original overview dashboard as the top-level health/status page, and use the second dashboard for signal-quality debugging.
 
 ## poll-modem instrumentation plan
 

@@ -15,6 +15,7 @@ Each playbook is intended to be practical and reusable. If you are doing a relat
 7. [Troubleshoot monitoring rollouts](./07-troubleshoot-monitoring-rollouts.md)
 8. [Provision and observe poll-modem](./08-provision-and-observe-poll-modem.md)
 9. [Create Grafana dashboards for poll-modem](./09-create-grafana-dashboards-for-poll-modem.md)
+10. [Expose Grafana via Traefik](./10-expose-grafana-via-traefik.md)
 
 ## Writing style
 
