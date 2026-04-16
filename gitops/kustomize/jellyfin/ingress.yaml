@@ -1,0 +1,16 @@
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: jellyfin
+  namespace: jellyfin
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`watch.crib.scapegoat.dev`)
+      kind: Rule
+      services:
+        - name: jellyfin
+          port: 80
+  tls:
+    secretName: crib-scapegoat-dev-tls
