@@ -29,3 +29,19 @@ spec:
       services:
         - name: jellyfin
           port: 80
+---
+# TV route via IP
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: jellyfin-tv
+  namespace: jellyfin
+spec:
+  entryPoints:
+    - web
+  routes:
+    - match: Host(`192.168.0.212`)
+      kind: Rule
+      services:
+        - name: jellyfin
+          port: 80
