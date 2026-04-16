@@ -11,3 +11,4 @@
 - Exposed Grafana at `grafana.crib.scapegoat.dev` through a dedicated Traefik IngressRoute
 - Copied the wildcard TLS secret into the `monitoring` namespace for Grafana TLS
 - Verified Grafana loads both poll-modem dashboards via the sidecar/search API
+- Switched the downstream signal dashboard's average SNR stat to a 1h rolling average

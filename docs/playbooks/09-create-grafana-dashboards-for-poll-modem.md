@@ -77,6 +77,12 @@ time() - poll_modem_last_success_unixtime
 poll_modem_downstream_snr_db
 ```
 
+### 1h rolling average downstream SNR
+
+```promql
+avg(avg_over_time(poll_modem_downstream_snr_db[1h]))
+```
+
 ### Channel power
 
 ```promql

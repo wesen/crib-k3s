@@ -16,3 +16,4 @@
 - [ ] Copy the wildcard TLS secret into the monitoring namespace for Grafana TLS
 - [ ] Add a second poll-modem dashboard focused on downstream SNR and power trends
 - [ ] Validate Grafana loads the new dashboards and serves the public ingress
+- [ ] Change the Average Downstream SNR panel to a 1h rolling average

@@ -701,3 +701,19 @@ Grafana’s search API now returns both dashboards:
 - `poll-modem / Downstream Signal Trends`
 
 This gives us the broad health dashboard and a second, signal-focused dashboard for investigating SNR and power trends over time.
+
+## Step 21: Switch Average Downstream SNR to a 1h rolling average
+
+### What changed
+
+The top stat on the downstream signal dashboard used to show the instant average downstream SNR across channels. I changed it to a 1-hour rolling average so the number reflects recent history instead of the latest sample only.
+
+### Query
+
+```promql
+avg(avg_over_time(poll_modem_downstream_snr_db[1h]))
+```
+
+### Why
+
+This makes the stat much more useful for spotting slow degradation or sustained recovery in SNR without being too jumpy from a single poll.

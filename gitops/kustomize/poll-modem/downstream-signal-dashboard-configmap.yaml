@@ -53,11 +53,11 @@ data:
           "targets": [
             {
               "datasource": { "type": "prometheus", "uid": "prometheus" },
-              "expr": "avg(poll_modem_downstream_snr_db)",
+              "expr": "avg(avg_over_time(poll_modem_downstream_snr_db[1h]))",
               "refId": "A"
             }
           ],
-          "title": "Average Downstream SNR",
+          "title": "Average Downstream SNR (1h)",
           "type": "stat"
         },
         {
