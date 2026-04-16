@@ -587,3 +587,77 @@ This closes the loop for the observability work:
 - app metrics are exported
 - Prometheus scrapes them
 - Grafana is deployed and ready to query Prometheus
+
+## Step 17: Export modem signal-quality metrics
+
+### What changed
+
+I extended `poll-modem` so `/metrics` now exports per-channel signal data in addition to the existing health counters.
+
+#### New metrics families
+
+- downstream SNR by channel
+- downstream power by channel
+- downstream frequency by channel
+- downstream lock state by channel
+- upstream power by channel
+- upstream frequency by channel
+- upstream symbol rate by channel
+- upstream lock state by channel
+- error codewords by channel
+
+### Implementation details
+
+The metric collector now:
+
+- parses numeric values out of the modem’s HTML tables
+- normalizes frequencies to hertz
+- normalizes symbol rate to symbols/second
+- converts lock status to numeric 1/0 gauges
+- resets stale per-channel series on each successful poll so old channel labels do not stick around
+- includes unit tests for numeric parsing and lock-state normalization
+
+### Validation
+
+I confirmed Prometheus can query the new series after the rollout:
+
+- `poll_modem_downstream_snr_db`
+- `poll_modem_downstream_power_dbmv`
+- `poll_modem_downstream_frequency_hz`
+- `poll_modem_upstream_symbol_rate_sps`
+- `poll_modem_downstream_locked`
+
+The Prometheus API returned non-empty vectors for the signal series.
+
+## Step 18: Add the Grafana dashboard for modem signal plots
+
+### What changed
+
+I added a Grafana dashboard ConfigMap to the `poll-modem` kustomize overlay:
+
+- `gitops/kustomize/poll-modem/dashboard-configmap.yaml`
+
+It is labeled for the kube-prometheus-stack Grafana sidecar with:
+
+- `grafana_dashboard: "1"`
+
+### Dashboard coverage
+
+The dashboard now includes panels for:
+
+- collector health
+- age since last success/failure
+- downstream SNR
+- channel power
+- channel frequency
+- upstream symbol rate
+- channel lock state
+- error codewords
+
+### Validation
+
+The ConfigMap now exists in the cluster and Prometheus is seeing the signal metrics. The dashboard should be picked up by Grafana’s dashboard sidecar without any manual import step.
+
+### Operational note
+
+I kept the dashboard ConfigMap in the app namespace so it travels with the app overlay instead of living as a separate monitoring-only artifact.
