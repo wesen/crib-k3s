@@ -479,3 +479,31 @@ That combination is fine for quick demos, but it is not reliable when the image 
 ### Result
 
 Once the deployment points at the new tag, the pod will restart with the metrics-enabled binary and Prometheus should be able to scrape the `/metrics` endpoint successfully.
+
+## Step 14: Add GHCR pull credentials for the new image tag
+
+### What happened
+
+Once `poll-modem` was pinned to the new metrics-enabled image tag, the node could no longer rely on the cached `latest` image. GHCR returned `401 Unauthorized` for anonymous pulls of `ghcr.io/wesen/poll-modem:8a80fbd`.
+
+### Fix
+
+I created a manual image pull secret in the `poll-modem` namespace:
+
+- `ghcr-pull`
+- type: `kubernetes.io/dockerconfigjson`
+
+The secret uses the existing GitHub CLI token on this machine, which already has the necessary package scopes.
+
+The deployment now references it via:
+
+```yaml
+imagePullSecrets:
+  - name: ghcr-pull
+```
+
+### Why this is acceptable
+
+- the secret stays out of git
+- the deployment manifest only references the secret name
+- the change keeps the cluster reproducible without depending on an accidental node-local image cache
