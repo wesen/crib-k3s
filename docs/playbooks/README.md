@@ -21,6 +21,7 @@ Each playbook is intended to be practical and reusable. If you are doing a relat
 
 These playbooks are intentionally opinionated:
 
+- treat `*.crib.scapegoat.dev` as tailnet-facing DNS to `100.67.90.12`, not as a public custom-domain Funnel path
 - prefer GitOps and ArgoCD over manual `kubectl apply`
 - keep secrets out of git
 - reuse the wildcard TLS secret when possible

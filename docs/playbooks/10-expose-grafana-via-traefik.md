@@ -19,7 +19,7 @@ Use this playbook when:
 
 Grafana is exposed as a separate ArgoCD-managed app that only owns the ingress resources.
 
-That keeps the monitoring stack itself simple while still letting us publish Grafana cleanly.
+That keeps the monitoring stack itself simple while still giving Grafana a clean tailnet URL.
 
 ## Prerequisites
 
@@ -69,7 +69,7 @@ kubectl get application grafana-crib -n argocd -o wide
 kubectl get ingressroute -n monitoring
 ```
 
-Then test the public URL:
+Then test the tailnet URL from a client that can reach the crib Tailscale address:
 
 ```bash
 curl -skI https://grafana.crib.scapegoat.dev/

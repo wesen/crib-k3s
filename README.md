@@ -1,6 +1,6 @@
 # crib-k3s
 
-k3s cluster on Proxmox with ArgoCD GitOps, exposed via Tailscale Funnel at `*.crib.scapegoat.dev`.
+k3s cluster on Proxmox with ArgoCD GitOps, reached over Tailscale at `*.crib.scapegoat.dev`.
 
 ## Infrastructure
 
@@ -10,10 +10,10 @@ k3s cluster on Proxmox with ArgoCD GitOps, exposed via Tailscale Funnel at `*.cr
 | Tailscale | `k3s-proxmox` at `100.67.90.12` |
 | k3s | v1.34.6+k3s1 |
 | ArgoCD | admin password in `/root/argocd-password` on VM |
-| DNS | `*.crib.scapegoat.dev → k3s-proxmox.tail879302.ts.net` (DigitalOcean) |
-| TLS | Let's Encrypt via cert-manager DNS01 (DigitalOcean) |
-| Ingress | Traefik (k3s default) |
-| Funnel | TCP passthrough 443 → Traefik |
+| DNS | `*.crib.scapegoat.dev → 100.67.90.12` (DigitalOcean A record to the Tailscale IP) |
+| TLS | Let's Encrypt via cert-manager DNS01 (DigitalOcean), with a shared wildcard cert reused by app routes |
+| Ingress | Traefik (k3s default), usually via `IngressRoute` and `crib-scapegoat-dev-tls` |
+| Access model | Custom `*.crib.scapegoat.dev` names are tailnet-facing; Tailscale Funnel was tried for custom domains but is not the current model |
 
 ## Access
 
@@ -38,7 +38,7 @@ gitops/
 │   └── argocd-crib.yaml          # ArgoCD ingress
 └── kustomize/
     ├── platform-cert-issuer/      # cert-manager config
-    └── argocd-crib/              # ArgoCD public access
+    └── argocd-crib/              # ArgoCD tailnet ingress
 
 docs/
 └── playbooks/                     # Operational runbooks and troubleshooting guides
@@ -60,8 +60,12 @@ ssh ubuntu@<vm-ip> "sudo tailscale up --auth-key=<key> --hostname=k3s-proxmox"
 kubectl apply -f gitops/applications/platform-cert-issuer.yaml
 kubectl apply -f gitops/applications/argocd-crib.yaml
 
-# 5. Enable Funnel
-ssh ubuntu@k3s-proxmox "sudo tailscale funnel --bg --tcp 443 127.0.0.1:443"
+# 5. Confirm the crib DNS record exists in Terraform
+cd /home/manuel/code/wesen/terraform
+direnv exec . terraform -chdir=dns/zones/scapegoat-dev/envs/prod plan -detailed-exitcode
+
+# The expected DNS model is:
+# *.crib.scapegoat.dev A 100.67.90.12
 ```
 
 ## Adding a new service

@@ -118,15 +118,37 @@ kubectl get ingress -n argocd
 curl -kI https://argocd.crib.scapegoat.dev/
 ```
 
-## Step 7: Enable Funnel
+## Step 7: Verify crib DNS and tailnet ingress
 
-The cluster is reached through Tailscale Funnel / TCP passthrough.
+The current crib access model is tailnet-facing custom DNS, not custom-domain Tailscale Funnel.
 
-```bash
-sudo tailscale funnel --bg --tcp 443 127.0.0.1:443
+The expected DigitalOcean record is managed in `/home/manuel/code/wesen/terraform`:
+
+```hcl
+wildcard_crib_a = {
+  type  = "A"
+  name  = "*.crib"
+  value = "100.67.90.12"
+  ttl   = 3600
+}
 ```
 
-Then verify the hostname resolves and the ingress is reachable through the funnel path.
+That means `argocd.crib.scapegoat.dev`, `modem.crib.scapegoat.dev`, and other crib hostnames resolve to the VM's Tailscale IP. Clients must be on the tailnet to use those names.
+
+Verify the Terraform side is clean:
+
+```bash
+cd /home/manuel/code/wesen/terraform
+direnv exec . terraform -chdir=dns/zones/scapegoat-dev/envs/prod plan -detailed-exitcode
+```
+
+Then verify the route from a tailnet-connected client:
+
+```bash
+curl -kI https://argocd.crib.scapegoat.dev/
+```
+
+Tailscale Funnel was tried earlier, including TCP passthrough, but it is not the current custom-domain model for `*.crib.scapegoat.dev`. Keep this distinction explicit when rebuilding the cluster.
 
 ## Validation checklist
 
@@ -135,6 +157,7 @@ Then verify the hostname resolves and the ingress is reachable through the funne
 - wildcard cert secret exists
 - `https://argocd.crib.scapegoat.dev/` responds
 - Tailscale access to the VM is stable
+- `*.crib.scapegoat.dev` resolves to `100.67.90.12`
 
 ## Common failure modes
 
@@ -153,8 +176,8 @@ If the machine is not reachable, confirm:
 
 - the auth key is valid
 - the hostname is correct
-- Funnel is enabled on the VM
-- the machine has a proper Tailscale IP / DNS identity
+- the machine has the expected Tailscale IP (`100.67.90.12`) or the Terraform DNS record has been updated to the new Tailscale IP
+- the machine has a proper Tailscale DNS identity
 
 ### cert-manager / DNS problems
 

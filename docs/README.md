@@ -2,7 +2,11 @@
 
 Operational playbooks for the crib-k3s homelab cluster.
 
-These docs capture the actual workflows used to build and run the cluster:
+These docs capture the actual workflows used to build and run the cluster.
+
+The current networking model is tailnet-facing custom DNS: `*.crib.scapegoat.dev` is a DigitalOcean A record to the VM's Tailscale IP (`100.67.90.12`). It is not a custom-domain Tailscale Funnel deployment. Clients need tailnet access for crib hostnames.
+
+The workflows cover:
 
 - bootstrap the Proxmox VM and k3s control plane
 - expose services with ArgoCD and Traefik
@@ -34,7 +38,7 @@ Start with the playbook that matches the task you want to do. Each playbook is w
 - `docs/playbooks/07-troubleshoot-monitoring-rollouts.md` — debug operator/webhook and scrape issues
 - `docs/playbooks/08-provision-and-observe-poll-modem.md` — full end-to-end poll-modem observability flow
 - `docs/playbooks/09-create-grafana-dashboards-for-poll-modem.md` — build and load Grafana dashboards for modem signal metrics
-- `docs/playbooks/10-expose-grafana-via-traefik.md` — publish Grafana at `grafana.crib.scapegoat.dev`
+- `docs/playbooks/10-expose-grafana-via-traefik.md` — expose Grafana on the tailnet at `grafana.crib.scapegoat.dev`
 
 ## Related repo areas
 
