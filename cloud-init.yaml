@@ -59,6 +59,10 @@ write_files:
             type: NodePort
           deployment:
             hostNetwork: true
+          # hostNetwork + hostPort means a second Traefik pod cannot bind 80/443
+          # while the old pod is still running. Recreate avoids Pending rollouts.
+          updateStrategy:
+            type: Recreate
           securityContext:
             capabilities:
               drop: []
@@ -71,6 +75,17 @@ write_files:
               hostPort: 80
             websecure:
               hostPort: 443
+          # The packaged chart defaults to publishing Ingress status from the
+          # traefik Service. In this hostPort/no-LoadBalancer model that leaves
+          # standard networking.k8s.io Ingress objects with an empty
+          # .status.loadBalancer, which ArgoCD reports as Progressing. Publish
+          # the Tailscale ingress IP explicitly so Ingress health becomes Healthy.
+          providers:
+            kubernetesIngress:
+              publishedService:
+                enabled: false
+          additionalArguments:
+            - "--providers.kubernetesingress.ingressendpoint.ip=100.67.90.12"
 
   # --- Tailscale repo ---
   - path: /usr/share/keyrings/tailscale-archive-keyring.gpg

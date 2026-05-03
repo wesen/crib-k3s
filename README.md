@@ -12,11 +12,14 @@ k3s cluster on Proxmox with ArgoCD GitOps, reached over Tailscale at `*.crib.sca
 | ArgoCD | admin password in `/root/argocd-password` on VM |
 | DNS | `*.crib.scapegoat.dev → 100.67.90.12` (DigitalOcean A record to the Tailscale IP) |
 | TLS | Let's Encrypt via cert-manager DNS01 (DigitalOcean), with a shared wildcard cert reused by app routes |
-| Ingress | k3s packaged Traefik, configured by cloud-init HelmChartConfig with hostNetwork + hostPort 80/443 |
+| Ingress | k3s packaged Traefik, configured by cloud-init HelmChartConfig with hostNetwork + hostPort 80/443 and explicit Ingress status IP `100.67.90.12` |
 | Access model | Custom `*.crib.scapegoat.dev` names are tailnet-facing; Tailscale Funnel was tried for custom domains but is not the current model |
 | Legacy proxy | `k3s-tailscale-proxy.service` DNAT-to-NodePort is disabled; do not enable it with the Traefik hostPort model |
 
 ## Access
+
+Traefik is intentionally configured to publish `100.67.90.12` into standard Kubernetes `Ingress` status. Without that explicit status IP, `argocd-crib` can remain `Progressing` in ArgoCD even while the route serves correctly, because ArgoCD's built-in health check treats an Ingress with empty `.status.loadBalancer` as not fully healthy.
+
 
 ```bash
 # kubectl

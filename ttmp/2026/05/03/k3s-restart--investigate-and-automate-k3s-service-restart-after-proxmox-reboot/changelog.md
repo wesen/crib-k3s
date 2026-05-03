@@ -73,3 +73,16 @@ Updated Obsidian project report with real reboot validation: baseline validation
 - /home/manuel/code/wesen/crib-k3s/ttmp/2026/05/03/k3s-restart--investigate-and-automate-k3s-service-restart-after-proxmox-reboot/sources/ARTICLE - Debugging a k3s Post-Reboot Outage.md — Copied updated report into ticket sources
 - /home/manuel/code/wesen/obsidian-vault/Projects/2026/05/03/ARTICLE - Debugging a k3s Post-Reboot Outage.md — Updated project report with validation step
 
+
+## 2026-05-03
+
+Investigated argocd-crib Progressing health, identified empty Ingress loadBalancer status under hostPort Traefik, configured Traefik to publish Tailscale IP 100.67.90.12, changed Traefik updates to Recreate for hostPort safety, tightened validation, and updated diary/report.
+
+### Related Files
+
+- /home/manuel/code/wesen/crib-k3s/README.md — Document explicit Traefik Ingress status IP
+- /home/manuel/code/wesen/crib-k3s/cloud-init.yaml — Persist Traefik Ingress status IP and Recreate strategy
+- /home/manuel/code/wesen/crib-k3s/ttmp/2026/05/03/k3s-restart--investigate-and-automate-k3s-service-restart-after-proxmox-reboot/reference/02-diary-takeover-crashloop-investigation.md — Record argocd-crib Progressing investigation
+- /home/manuel/code/wesen/crib-k3s/ttmp/2026/05/03/k3s-restart--investigate-and-automate-k3s-service-restart-after-proxmox-reboot/scripts/01-post-reboot-validate.sh — Tighten ArgoCD health and Ingress status validation
+- /home/manuel/code/wesen/crib-k3s/ttmp/2026/05/03/k3s-restart--investigate-and-automate-k3s-service-restart-after-proxmox-reboot/sources/ARTICLE - Debugging a k3s Post-Reboot Outage.md — Updated project report copy with argocd-crib health fix
+

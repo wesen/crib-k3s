@@ -651,3 +651,128 @@ Final successful post-reboot validation completed at `2026-05-03T09:09:58-04:00`
 ```text
 POST-REBOOT VALIDATION OK
 ```
+
+---
+
+## Step 10: Investigated and fixed `argocd-crib` Progressing health
+
+After the reboot validation, the user asked me to investigate why `argocd-crib` stayed `Progressing` even though `https://argocd.crib.scapegoat.dev/` returned HTTP 200. The root cause was not an application serving problem. It was the interaction between ArgoCD's built-in health check for standard Kubernetes `Ingress` resources and the hostPort Traefik ingress model.
+
+### Prompt Context
+
+**User prompt (verbatim):** "Ok, figure out the argocd progressing thing"
+
+**Follow-up constraint (verbatim):** "continue keeping a diary btw"
+
+**Assistant interpretation:** Identify the actual health signal causing `argocd-crib` to report `Progressing`, fix it if appropriate, persist the fix, and record the work in the diary.
+
+### What I inspected
+
+I inspected the `argocd-crib` Application status:
+
+```bash
+kubectl get application argocd-crib -n argocd -o wide
+kubectl describe application argocd-crib -n argocd
+kubectl get application argocd-crib -n argocd -o json | jq '.status'
+```
+
+The Application was `Synced` but `Progressing`. It owned two resources:
+
+```text
+ConfigMap argocd-cmd-params-cm
+Ingress   argocd-server-crib
+```
+
+The relevant Ingress had an empty load balancer status:
+
+```yaml
+status:
+  loadBalancer: {}
+```
+
+The Ingress worked at the HTTP level, but Kubernetes had no published ingress address. ArgoCD's standard Ingress health check treats that as not fully healthy, so the Application stayed `Progressing`.
+
+### Root cause
+
+The recovered ingress model uses k3s packaged Traefik with `hostNetwork: true` and hostPorts 80/443. The Traefik chart defaults to publishing Ingress status from the Traefik Kubernetes Service:
+
+```text
+--providers.kubernetesingress.ingressendpoint.publishedservice=kube-system/traefik
+```
+
+In this cluster, that Service is not a cloud `LoadBalancer`; it does not have an external load balancer address. Therefore Traefik had no address to copy into standard `Ingress.status.loadBalancer`, even though the hostPort listener was reachable through Tailscale at `100.67.90.12`.
+
+### Fix applied live
+
+I updated the Traefik `HelmChartConfig` so the Kubernetes Ingress provider does not use the Service as its published status source and instead publishes the Tailscale ingress IP explicitly:
+
+```yaml
+providers:
+  kubernetesIngress:
+    publishedService:
+      enabled: false
+additionalArguments:
+  - "--providers.kubernetesingress.ingressendpoint.ip=100.67.90.12"
+```
+
+The first attempt exposed another important hostPort deployment detail. Traefik's chart uses a rolling Deployment strategy by default. With `hostNetwork` and hostPorts 80/443, a new Traefik pod cannot schedule while the old pod still owns those host ports. The fix is to use a Recreate update strategy for Traefik:
+
+```yaml
+updateStrategy:
+  type: Recreate
+```
+
+After applying those values, the Traefik Deployment rolled out successfully and its args included:
+
+```text
+--providers.kubernetesingress.ingressendpoint.ip=100.67.90.12
+```
+
+I also wrote the same manifest back to the live VM file at:
+
+```text
+/var/lib/rancher/k3s/server/manifests/traefik-config.yaml
+```
+
+That matters because k3s packaged component config is reconciled from the server manifests directory. Updating only the Kubernetes API object would leave a stale manifest file that could reassert the old values later.
+
+### Result
+
+The `argocd-server-crib` Ingress status now has the expected address:
+
+```text
+NAME                 CLASS     HOSTS                                                     ADDRESS        PORTS
+argocd-server-crib   traefik   argocd.crib.scapegoat.dev,k3s-proxmox.tail879302.ts.net   100.67.90.12   80, 443
+```
+
+`argocd-crib` became healthy:
+
+```text
+NAME          SYNC STATUS   HEALTH STATUS
+argocd-crib   Synced        Healthy
+```
+
+Then the tightened validation script passed with all ArgoCD apps requiring `Healthy`:
+
+```text
+POST-REBOOT VALIDATION OK
+```
+
+### Repository changes made
+
+- Updated `cloud-init.yaml` Traefik `HelmChartConfig` with:
+  - `updateStrategy.type: Recreate`
+  - disabled `publishedService`
+  - explicit ingress endpoint IP `100.67.90.12`
+- Updated `README.md` to explain why Traefik publishes the Tailscale IP into standard Ingress status.
+- Updated `scripts/01-post-reboot-validate.sh` to:
+  - assert `argocd-server-crib` Ingress status IP is `100.67.90.12`
+  - require every ArgoCD Application to be `Healthy`; the old `argocd-crib Progressing` exception is no longer needed.
+
+### What was tricky
+
+The externally visible service was healthy, so a simple HTTP check hid the problem. The failing signal was Kubernetes object health, not network health. The fix had to target the status publisher in Traefik's Kubernetes Ingress provider, not the ArgoCD server or the cert-manager certificate.
+
+### Future note
+
+If the Tailscale IP ever changes, update the DNS record and the Traefik `ingressendpoint.ip` value together. Otherwise the Ingress status address will be inaccurate even if routing still works through some other path.

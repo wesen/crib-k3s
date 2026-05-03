@@ -118,6 +118,8 @@ sudo kubectl get crd ingressroutes.traefik.io >/dev/null || fail "IngressRoute C
 sudo kubectl get ingressroute -A
 route_count=$(sudo kubectl get ingressroute -A --no-headers | wc -l | tr -d ' ')
 [[ "$route_count" -ge 5 ]] || fail "Expected at least 5 IngressRoutes, got $route_count"
+argocd_ingress_ip=$(sudo kubectl get ingress argocd-server-crib -n argocd -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)
+[[ "$argocd_ingress_ip" == "100.67.90.12" ]] || fail "argocd-server-crib Ingress status IP is '$argocd_ingress_ip', expected 100.67.90.12"
 
 echo "--- ArgoCD apps"
 sudo kubectl get application -n argocd -o wide
@@ -126,7 +128,7 @@ if [[ -n "$not_synced" ]]; then
   echo "$not_synced" >&2
   fail "Some ArgoCD apps are not Synced"
 fi
-unhealthy=$(sudo kubectl get application -n argocd --no-headers | awk '$3 != "Healthy" && !($1 == "argocd-crib" && $3 == "Progressing") {print}' || true)
+unhealthy=$(sudo kubectl get application -n argocd --no-headers | awk '$3 != "Healthy" {print}' || true)
 if [[ -n "$unhealthy" ]]; then
   echo "$unhealthy" >&2
   fail "Some ArgoCD apps are unhealthy"

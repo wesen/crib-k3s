@@ -448,6 +448,61 @@ The script and playbook were committed as:
 
 This validation step is important because it exercised the exact failure mode that caused the incident: k3s startup after reboot. The recovered model no longer depends on manual post-boot edits, stale live state, or an already-running Traefik deployment.
 
+## Resolving `argocd-crib` Progressing health
+
+One post-validation anomaly remained: `argocd-crib` reported `Synced` but `Progressing`, while `https://argocd.crib.scapegoat.dev/` returned HTTP 200. The service worked, but ArgoCD still considered the Application not fully healthy.
+
+The Application owned two resources:
+
+```text
+ConfigMap argocd-cmd-params-cm
+Ingress   argocd-server-crib
+```
+
+The Ingress was the important resource. Its status was empty:
+
+```yaml
+status:
+  loadBalancer: {}
+```
+
+ArgoCD's built-in health check for a standard Kubernetes `Ingress` expects the ingress controller to publish an address into `.status.loadBalancer`. In this cluster, Traefik was serving traffic through `hostNetwork` and hostPorts 80/443, not through a cloud `LoadBalancer` Service. The default Traefik chart configuration published Ingress status from the Traefik Service:
+
+```text
+--providers.kubernetesingress.ingressendpoint.publishedservice=kube-system/traefik
+```
+
+That Service had no load balancer address to copy, so `argocd-server-crib` served correctly but never became healthy from ArgoCD's perspective.
+
+The fix was to make Traefik publish the Tailscale ingress IP explicitly:
+
+```yaml
+providers:
+  kubernetesIngress:
+    publishedService:
+      enabled: false
+additionalArguments:
+  - "--providers.kubernetesingress.ingressendpoint.ip=100.67.90.12"
+```
+
+Applying that change exposed one more hostPort-specific deployment detail. Traefik's chart defaults to a rolling update strategy. With `hostNetwork` and hostPorts 80/443, a second Traefik pod cannot bind the same host ports while the old pod is still running. The safe rollout strategy for this single-node hostPort deployment is therefore `Recreate`:
+
+```yaml
+updateStrategy:
+  type: Recreate
+```
+
+After applying the change, the Ingress status became explicit:
+
+```text
+NAME                 CLASS     HOSTS                                                     ADDRESS        PORTS
+argocd-server-crib   traefik   argocd.crib.scapegoat.dev,k3s-proxmox.tail879302.ts.net   100.67.90.12   80, 443
+```
+
+`argocd-crib` then became `Healthy`. The validation script was tightened so it now requires every ArgoCD Application to be `Healthy` and explicitly checks that `argocd-server-crib` publishes `100.67.90.12` as its Ingress status address.
+
+This fix was applied live, written back to `/var/lib/rancher/k3s/server/manifests/traefik-config.yaml`, and persisted in `cloud-init.yaml` so the k3s packaged component manifest cannot revert after a restart or rebuild.
+
 ## Lessons learned
 
 ### Do not mix ingress exposure models
@@ -545,9 +600,13 @@ journalctl -u k3s.service | grep 'cloud-controller-manager exited'
 
 7. **Validation scripts must wait for the cluster, not just SSH.** SSH can return while Kubernetes pods are still restarting and ArgoCD is still reconciling. A reboot validator should retry the full validation until the cluster settles.
 
-8. **Consolidate Tailscale identities.** Use a single hostname for each VM. Clean up stale registrations promptly.
+8. **Ingress health is not the same as HTTP reachability.** A standard Kubernetes `Ingress` can serve traffic and still be `Progressing` in ArgoCD if `.status.loadBalancer` is empty. In a hostPort Traefik model, publish the known ingress IP explicitly.
 
-9. **After any k3s config change, verify the node is stable for 5+ minutes.** The CCM race condition can take up to 30 seconds to manifest. A quick `kubectl get nodes` is not sufficient.
+9. **Use Recreate updates for single-node hostPort Traefik.** Rolling updates can strand a new Traefik pod in Pending because the old pod still owns host ports 80/443.
+
+10. **Consolidate Tailscale identities.** Use a single hostname for each VM. Clean up stale registrations promptly.
+
+11. **After any k3s config change, verify the node is stable for 5+ minutes.** The CCM race condition can take up to 30 seconds to manifest. A quick `kubectl get nodes` is not sufficient.
 
 ## Related resources
 
@@ -571,4 +630,4 @@ journalctl -u k3s.service | grep 'cloud-controller-manager exited'
 1. Promote the post-reboot validation script to a top-level repo script or Makefile target if it becomes a regular operator tool.
 2. Test the updated `cloud-init.yaml` through a full VM rebuild, not just a reboot of the repaired VM.
 3. Decide whether to delete the disabled `k3s-tailscale-proxy.service` from the VM or leave it as an explicit rollback artifact.
-4. Investigate why `argocd-crib` can remain `Progressing` while serving correctly, and decide whether the validation script should keep allowing that state.
+4. If the Tailscale IP changes, update DNS and Traefik's explicit `ingressendpoint.ip` together.
