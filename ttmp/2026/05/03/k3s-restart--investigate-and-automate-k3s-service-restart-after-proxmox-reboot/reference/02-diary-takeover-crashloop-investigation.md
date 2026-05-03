@@ -578,3 +578,76 @@ Whether cloud-init `write_files` should create `/var/lib/rancher/k3s/server/mani
 
 - Add a recovery/playbook doc that names the final hostPort model.
 - Consider deleting or archiving the legacy systemd proxy service from the VM once the hostPort model is fully validated after reboot.
+
+---
+
+## Step 9: Wrote validation script, playbook, rebooted VM, and validated recovery
+
+I wrote the post-reboot validation automation and an operator playbook, then rebooted the k3s VM and validated that the cluster came back cleanly. The first validation attempt after reboot ran too early and correctly found pods still settling; I fixed the script so `--wait` retries full validation instead of only waiting for SSH. The final post-reboot validation passed.
+
+### Prompt Context
+
+**User prompt (verbatim):** "write post-reboot validation script and operator playbook, then actually reboot the machine and make sure it comes back up properly"
+
+**Assistant interpretation:** Produce reusable operator artifacts, then perform a real reboot test of the recovered architecture.
+
+**Inferred user intent:** Prove that the final k3s/Traefik/cloud-init model survives reboot, not just live manual repair.
+
+### What I did
+
+- Wrote `scripts/01-post-reboot-validate.sh` in the ticket workspace.
+- Wrote `playbooks/01-post-reboot-recovery-and-validation.md` in the ticket workspace.
+- Ran the validation script before reboot as a baseline.
+- Rebooted the k3s VM via `ssh ubuntu@100.67.90.12 'sudo reboot'`.
+- Ran the validation script with `--wait` after reboot.
+- Fixed two script bugs found during real use:
+  - `systemctl status | head` under `pipefail` caused exit 141; replaced with `sed -n`.
+  - `--wait` initially retried only SSH and let a failed remote validation fall through to URL checks; changed `run_once` to return immediately on remote validation failure and made `--wait` retry full validation.
+
+### What worked
+
+- The VM rebooted and returned on Tailscale.
+- k3s came back `active` and node `Ready`.
+- Embedded cloud-controller-manager remained enabled and did not crash-loop.
+- Traefik came back Running.
+- ArgoCD Applications remained Synced/Healthy after the cluster settled.
+- The legacy DNAT proxy stayed `disabled` and `inactive`.
+- Stale DNAT rules did not return.
+- External URL checks passed:
+  ```text
+  https://argocd.crib.scapegoat.dev/  -> HTTP 200
+  https://watch.crib.scapegoat.dev/   -> HTTP 302
+  https://grafana.crib.scapegoat.dev/ -> HTTP 302
+  https://modem.crib.scapegoat.dev/   -> HTTP 200
+  ```
+
+### What didn't work
+
+- The first post-reboot validation attempt failed because pods were still settling. This was expected operationally but exposed that `--wait` needed to retry the entire validation, not just SSH.
+- Immediately after reboot, some pods reported `Unknown` or partial readiness for a short period; the second `--wait` run passed once the cluster settled.
+
+### What I learned
+
+A useful reboot validation script must treat SSH readiness as only the first gate. Kubernetes needs additional settling time after SSH returns, especially for ArgoCD, monitoring, and pods with persistent volumes. The script must retry cluster-level checks until they pass or a real timeout expires.
+
+### What was tricky to build
+
+The script had to distinguish transient reboot settling from real failure. The chosen approach is simple: in `--wait` mode, rerun all checks until success or timeout. This avoids embedding complex per-resource backoff logic.
+
+### What warrants a second pair of eyes
+
+- Whether `argocd-crib` being `Progressing` should be allowed indefinitely. It served HTTP 200, and the script currently permits `argocd-crib` Progressing while requiring other apps Healthy.
+- Whether to add log checks for `cloud-controller-manager exited` after reboot as a hard failure.
+
+### What should be done in the future
+
+- Optionally install the validation script as a top-level repo script or Makefile target.
+- Consider deleting the disabled legacy proxy service from the VM after one more reboot validation.
+
+### Technical details
+
+Final successful post-reboot validation completed at `2026-05-03T09:09:58-04:00` with:
+
+```text
+POST-REBOOT VALIDATION OK
+```

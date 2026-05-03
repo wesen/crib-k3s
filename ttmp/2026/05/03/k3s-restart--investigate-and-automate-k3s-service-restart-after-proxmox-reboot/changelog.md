@@ -52,3 +52,14 @@ Updated Obsidian project report with successful takeover recovery: CCM ordering 
 - /home/manuel/code/wesen/crib-k3s/ttmp/2026/05/03/k3s-restart--investigate-and-automate-k3s-service-restart-after-proxmox-reboot/sources/ARTICLE - Debugging a k3s Post-Reboot Outage.md — Copied updated report into ticket sources
 - /home/manuel/code/wesen/obsidian-vault/Projects/2026/05/03/ARTICLE - Debugging a k3s Post-Reboot Outage.md — Updated vault project report with completed recovery
 
+
+## 2026-05-03
+
+Added post-reboot validation script and operator playbook, performed real k3s VM reboot, fixed validation wait-loop bugs, and confirmed all crib URLs and cluster checks pass after reboot.
+
+### Related Files
+
+- /home/manuel/code/wesen/crib-k3s/ttmp/2026/05/03/k3s-restart--investigate-and-automate-k3s-service-restart-after-proxmox-reboot/playbooks/01-post-reboot-recovery-and-validation.md — Operator playbook for reboot validation and recovery
+- /home/manuel/code/wesen/crib-k3s/ttmp/2026/05/03/k3s-restart--investigate-and-automate-k3s-service-restart-after-proxmox-reboot/reference/02-diary-takeover-crashloop-investigation.md — Recorded real reboot validation results
+- /home/manuel/code/wesen/crib-k3s/ttmp/2026/05/03/k3s-restart--investigate-and-automate-k3s-service-restart-after-proxmox-reboot/scripts/01-post-reboot-validate.sh — Post-reboot validation script tested before and after real VM reboot
+
