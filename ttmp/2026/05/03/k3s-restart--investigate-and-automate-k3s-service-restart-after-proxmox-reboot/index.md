@@ -1,7 +1,7 @@
 ---
 Title: Investigate and automate k3s service restart after Proxmox reboot
 Ticket: k3s-restart
-Status: active
+Status: complete
 Topics:
     - k3s
     - proxmox
@@ -32,10 +32,11 @@ RelatedFiles:
       Note: Obsidian vault article copied into ticket workspace
 ExternalSources: []
 Summary: ""
-LastUpdated: 2026-05-03T07:40:39.245382313-04:00
+LastUpdated: 2026-05-03T09:30:56.766358745-04:00
 WhatFor: ""
 WhenToUse: ""
 ---
+
 
 
 
