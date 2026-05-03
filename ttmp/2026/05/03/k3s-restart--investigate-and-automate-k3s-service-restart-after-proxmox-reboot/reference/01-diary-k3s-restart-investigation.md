@@ -356,3 +356,91 @@ compounding of two independent oversights.
 - Fix cloud-init.yaml to match the intended state
 - Add a comment in k3s config explaining why Traefik is (or isn't) disabled
 - Consider a reconciliation script that checks if cloud-init matches the actual running state
+
+---
+
+## Step 6: Attempted Traefik fix — hit k3s crash loop
+
+Attempted to re-enable Traefik by editing the k3s config on the VM. Removing `traefik`
+from the `disable` list caused k3s to write the Traefik manifest, but k3s immediately
+entered a crash loop due to a known RBAC race condition in the cloud-controller-manager.
+
+### Prompt Context
+
+**User prompt (verbatim):** (see Step 1)
+
+**Assistant interpretation:** Apply the Traefik fix (remove from disable list, apply HelmChartConfig, restart k3s).
+
+**Inferred user intent:** Get services back online.
+
+### What I did
+
+1. Removed `traefik` from the k3s `disable` list in `/etc/rancher/k3s/config.yaml` via `sed`
+2. Applied the `HelmChartConfig` for Traefik with hostNetwork/hostPort settings via `kubectl apply`
+3. Restarted k3s service
+4. k3s wrote `traefik.yaml` to manifests but then crashed
+5. Investigated with `journalctl` — found cloud-controller-manager RBAC error
+6. Searched web via `surf kagi search` — found k3s issue #7328, a known race condition
+7. Downloaded issue #7328, #5114, and k3s helm docs to `sources/` via `defuddle`
+8. Attempted multiple restarts — k3s keeps crash-looping on the same RBAC error
+
+### What worked
+
+- k3s correctly wrote the Traefik manifest to `/var/lib/rancher/k3s/server/manifests/traefik.yaml`
+- The HelmChartConfig was accepted by k3s
+
+### What didn't work
+
+- k3s crash-loops on every restart with:
+  ```
+  Error: unable to load configmap based request-header-client-ca-file: configmaps
+  "extension-apiserver-authentication" is forbidden: User "k3s-cloud-controller-manager"
+  cannot get resource "configmaps" in API group "" in the namespace "kube-system"
+  ```
+- This is k3s issue #7328 — a race condition where the CCM starts before the RBAC
+  RoleBinding `k3s-cloud-controller-manager-authentication-reader` is created
+- The issue report says "Restarting the k3s service resolves the issue" but in our case
+  k3s keeps hitting the same race on every restart
+- The config had an empty `disable:` block which k3s might interpret oddly (k3s node annotations
+  showed `--disable ""`) — I cleaned this up by rewriting the config entirely
+
+### What I learned
+
+- k3s has a known race condition between CCM startup and RBAC role binding creation
+- The `disable:` key with an empty value is passed as `--disable ""` which might cause issues
+- The Traefik HelmChart resource is never created because k3s crashes before the helm controller
+  gets far enough to process the manifest
+- The cloud-controller-manager error causes k3s to shut down entirely (not just skip the CCM)
+
+### What was tricky
+
+- k3s appears to start successfully (node becomes Ready briefly) then crashes 10-15 seconds later
+- The crash loop makes it hard to apply manual fixes via kubectl — the API server is only
+  briefly available between crashes
+- Multiple restart attempts don't help because the race condition persists
+
+### Technical details
+
+**k3s issue #7328:** CCM starts at T+5s, tries to access `extension-apiserver-authentication` configmap,
+but the RoleBinding `k3s-cloud-controller-manager-authentication-reader` hasn't been created yet
+(creation happens at T+6s). CCM exits with error, k3s treats this as fatal and shuts down.
+
+On subsequent restarts, the RoleBinding should already exist — but in our case it doesn't,
+suggesting the RBAC resources are being recreated from scratch each time (possibly because
+k3s is using kine/SQLite and the crash prevents proper persistence).
+
+**Config state after fix attempt:**
+```yaml
+# /etc/rancher/k3s/config.yaml (cleaned up)
+write-kubeconfig-mode: "0644"
+tls-san:
+  - k3s-server
+  - k3s-server.tail879302.ts.net
+  - k3s-proxmox
+  - k3s-proxmox.tail879302.ts.net
+```
+
+**Next steps to try:**
+- Stop k3s, manually delete stale data, restart
+- Or: restore the original config with `disable: - traefik` to get k3s stable again, then
+  apply Traefik via a different mechanism (standalone Helm chart instead of k3s packaged)
