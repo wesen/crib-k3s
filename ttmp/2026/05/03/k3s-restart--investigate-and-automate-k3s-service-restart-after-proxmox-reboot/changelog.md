@@ -22,3 +22,12 @@ Added Appendix A: full historical analysis of why Traefik was disabled, traced f
 
 - /home/manuel/code/wesen/crib-k3s/ttmp/2026/05/03/k3s-restart--investigate-and-automate-k3s-service-restart-after-proxmox-reboot/design/01-system-architecture-and-recovery-guide-crib-k3s-cluster.md — Added 136-line Appendix A with historical timeline
 
+
+## 2026-05-03
+
+Wrote 360-line Obsidian vault article covering the full investigation, historical reconstruction, crash loop analysis, and working rules. Diary updated to Step 6.
+
+### Related Files
+
+- /home/manuel/code/wesen/obsidian-vault/Projects/2026/05/03/ARTICLE - Debugging a k3s Post-Reboot Outage.md — Comprehensive article in Obsidian vault
+
