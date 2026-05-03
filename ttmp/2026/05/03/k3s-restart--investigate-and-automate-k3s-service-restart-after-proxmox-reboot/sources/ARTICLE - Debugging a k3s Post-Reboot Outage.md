@@ -383,6 +383,71 @@ This was committed in the crib-k3s repo as:
 21e90a8 Recover crib k3s ingress and persist Traefik hostPort model
 ```
 
+## Proving the fix with a real reboot
+
+A live repair is not complete until it survives a reboot. After the recovery model was persisted, we wrote an operator validation script and playbook in the docmgr ticket workspace:
+
+```text
+ttmp/2026/05/03/k3s-restart--investigate-and-automate-k3s-service-restart-after-proxmox-reboot/scripts/01-post-reboot-validate.sh
+ttmp/2026/05/03/k3s-restart--investigate-and-automate-k3s-service-restart-after-proxmox-reboot/playbooks/01-post-reboot-recovery-and-validation.md
+```
+
+The validation script checks the full stack:
+
+- SSH reachability over Tailscale
+- `k3s.service` active state
+- node readiness
+- pod health
+- embedded cloud-controller-manager RBAC
+- Traefik HelmCharts, HelmChartConfig, pod, CRDs, and IngressRoutes
+- ArgoCD Application sync and health status
+- disabled/inactive legacy `k3s-tailscale-proxy.service`
+- absence of stale DNAT rules
+- external HTTP status codes for ArgoCD, Jellyfin, Grafana, and poll-modem
+
+The first baseline validation passed before reboot. Then the VM was rebooted:
+
+```bash
+ssh ubuntu@100.67.90.12 'sudo reboot'
+```
+
+The validation script was run in wait mode:
+
+```bash
+ttmp/2026/05/03/k3s-restart--investigate-and-automate-k3s-service-restart-after-proxmox-reboot/scripts/01-post-reboot-validate.sh --wait
+```
+
+This real test found two useful script bugs. First, `systemctl status | head` under `set -o pipefail` caused exit 141 because `head` closed the pipe early. That was replaced with `sed -n`. Second, the initial `--wait` implementation waited for SSH but did not retry the full Kubernetes validation; it could report success after URL checks even when the remote validation had just failed. The script was changed so `--wait` retries the entire validation until success or timeout.
+
+After those fixes, the post-reboot validation passed at `2026-05-03T09:09:58-04:00`:
+
+```text
+POST-REBOOT VALIDATION OK
+```
+
+The final reboot validation confirmed:
+
+```text
+k3s.service                         -> active
+node/k3s-server                     -> Ready
+Traefik                             -> Running
+IngressRoutes                       -> present
+k3s-tailscale-proxy.service         -> disabled / inactive
+stale DNAT rules                    -> absent
+argocd.crib.scapegoat.dev           -> HTTP 200
+watch.crib.scapegoat.dev            -> HTTP 302
+grafana.crib.scapegoat.dev          -> HTTP 302
+modem.crib.scapegoat.dev            -> HTTP 200
+```
+
+The script and playbook were committed as:
+
+```text
+26ccbcc Add post-reboot validation script and playbook
+```
+
+This validation step is important because it exercised the exact failure mode that caused the incident: k3s startup after reboot. The recovered model no longer depends on manual post-boot edits, stale live state, or an already-running Traefik deployment.
+
 ## Lessons learned
 
 ### Do not mix ingress exposure models
@@ -476,11 +541,13 @@ journalctl -u k3s.service | grep 'cloud-controller-manager exited'
 
 5. **Write accurate commit messages for infrastructure changes.** "using systemd iptables instead" obscured the fact that Traefik was still needed. Infrastructure commits should name the specific component being changed and what replaces what.
 
-6. **Test recovery procedures before you need them.** The post-reboot recovery was not tested when the iptables proxy was set up. A single test — reboot the VM and verify services come back — would have caught the Traefik gap immediately.
+6. **Test recovery procedures before you need them.** The post-reboot recovery was not tested when the iptables proxy was set up. A single test — reboot the VM and verify services come back — would have caught the Traefik gap immediately. The new validation script now performs this check end to end.
 
-7. **Consolidate Tailscale identities.** Use a single hostname for each VM. Clean up stale registrations promptly.
+7. **Validation scripts must wait for the cluster, not just SSH.** SSH can return while Kubernetes pods are still restarting and ArgoCD is still reconciling. A reboot validator should retry the full validation until the cluster settles.
 
-8. **After any k3s config change, verify the node is stable for 5+ minutes.** The CCM race condition can take up to 30 seconds to manifest. A quick `kubectl get nodes` is not sufficient.
+8. **Consolidate Tailscale identities.** Use a single hostname for each VM. Clean up stale registrations promptly.
+
+9. **After any k3s config change, verify the node is stable for 5+ minutes.** The CCM race condition can take up to 30 seconds to manifest. A quick `kubectl get nodes` is not sufficient.
 
 ## Related resources
 
@@ -501,7 +568,7 @@ journalctl -u k3s.service | grep 'cloud-controller-manager exited'
 
 ## Near-term next steps
 
-1. Write a post-reboot validation script that checks k3s, Traefik, ArgoCD sync state, IngressRoutes, and external URLs.
-2. Write a concise operator playbook based on the takeover recovery sequence.
-3. Test the updated `cloud-init.yaml` through a rebuild or at least through a controlled VM reboot.
-4. Decide whether to delete the disabled `k3s-tailscale-proxy.service` from the VM or leave it as an explicit rollback artifact.
+1. Promote the post-reboot validation script to a top-level repo script or Makefile target if it becomes a regular operator tool.
+2. Test the updated `cloud-init.yaml` through a full VM rebuild, not just a reboot of the repaired VM.
+3. Decide whether to delete the disabled `k3s-tailscale-proxy.service` from the VM or leave it as an explicit rollback artifact.
+4. Investigate why `argocd-crib` can remain `Progressing` while serving correctly, and decide whether the validation script should keep allowing that state.
