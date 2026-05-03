@@ -86,3 +86,15 @@ Investigated argocd-crib Progressing health, identified empty Ingress loadBalanc
 - /home/manuel/code/wesen/crib-k3s/ttmp/2026/05/03/k3s-restart--investigate-and-automate-k3s-service-restart-after-proxmox-reboot/scripts/01-post-reboot-validate.sh — Tighten ArgoCD health and Ingress status validation
 - /home/manuel/code/wesen/crib-k3s/ttmp/2026/05/03/k3s-restart--investigate-and-automate-k3s-service-restart-after-proxmox-reboot/sources/ARTICLE - Debugging a k3s Post-Reboot Outage.md — Updated project report copy with argocd-crib health fix
 
+
+## 2026-05-03
+
+Performed final controlled reboot after Traefik Ingress status fix; validation retried through transient monitoring Progressing and ArgoCD 503, then passed with all ArgoCD apps Healthy and all crib URLs correct; updated final diary and project report and synchronized the vault and ticket copies.
+
+### Related Files
+
+- /home/manuel/code/wesen/crib-k3s/ttmp/2026/05/03/k3s-restart--investigate-and-automate-k3s-service-restart-after-proxmox-reboot/reference/02-diary-takeover-crashloop-investigation.md — Recorded final reboot validation after ArgoCD health fix
+- /home/manuel/code/wesen/crib-k3s/ttmp/2026/05/03/k3s-restart--investigate-and-automate-k3s-service-restart-after-proxmox-reboot/scripts/01-post-reboot-validate.sh — URL mismatches are retryable in --wait mode
+- /home/manuel/code/wesen/crib-k3s/ttmp/2026/05/03/k3s-restart--investigate-and-automate-k3s-service-restart-after-proxmox-reboot/sources/ARTICLE - Debugging a k3s Post-Reboot Outage.md — Final project report copy with second reboot validation
+- /home/manuel/code/wesen/obsidian-vault/Projects/2026/05/03/ARTICLE - Debugging a k3s Post-Reboot Outage.md — Vault copy synchronized with final project report
+

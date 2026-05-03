@@ -161,7 +161,10 @@ check_urls() {
     # Use non-following code as primary for redirects, because Jellyfin/Grafana intentionally redirect.
     code=$(curl -skI -o /dev/null -w '%{http_code}' --connect-timeout 10 --max-time 20 "$url" || true)
     log "$url -> HTTP $code (expected $expected)"
-    [[ "$code" == "$expected" ]] || fail "Unexpected HTTP code for $url: got $code expected $expected"
+    if [[ "$code" != "$expected" ]]; then
+      log "Unexpected HTTP code for $url: got $code expected $expected"
+      return 1
+    fi
   done
 }
 

@@ -776,3 +776,80 @@ The externally visible service was healthy, so a simple HTTP check hid the probl
 ### Future note
 
 If the Tailscale IP ever changes, update the DNS record and the Traefik `ingressendpoint.ip` value together. Otherwise the Ingress status address will be inaccurate even if routing still works through some other path.
+
+---
+
+## Step 11: Reboot-validated the final Traefik Ingress status fix
+
+After fixing `argocd-crib` health, the user asked me to perform one more controlled reboot and update the final project report. This reboot specifically validated the new Traefik settings:
+
+- explicit Kubernetes Ingress status IP `100.67.90.12`
+- `updateStrategy.type: Recreate` for hostPort Traefik
+- no validation-script exception for `argocd-crib Progressing`
+
+### Prompt Context
+
+**User prompt (verbatim):** "do it, and do a final project report update (and copy to vault)"
+
+**Assistant interpretation:** Reboot the k3s VM again, prove the final ArgoCD health fix survives startup, then update the diary and project report copies.
+
+### What happened
+
+I rebooted the VM:
+
+```bash
+ssh ubuntu@100.67.90.12 'sudo reboot'
+```
+
+Then I ran the validation script:
+
+```bash
+./ttmp/2026/05/03/k3s-restart--investigate-and-automate-k3s-service-restart-after-proxmox-reboot/scripts/01-post-reboot-validate.sh --wait
+```
+
+The first validation pass reached SSH very quickly, while k3s and application pods were still settling. It found transient conditions:
+
+- `monitoring` was still `Progressing`
+- ArgoCD returned HTTP 503 briefly
+
+This exposed one final script issue: URL checks still called the top-level `fail`, which bypassed the wait-mode retry loop. I changed URL mismatches to `return 1` from `check_urls`, so `--wait` can retry transient HTTP failures the same way it retries transient Kubernetes health failures.
+
+### Final result
+
+The second validation attempt passed at `2026-05-03T09:25:56-04:00`:
+
+```text
+POST-REBOOT VALIDATION OK
+```
+
+The important final checks were:
+
+```text
+argocd-crib            Synced   Healthy
+monitoring             Synced   Healthy
+k3s-tailscale-proxy    disabled / inactive
+argocd URL             HTTP 200
+watch URL              HTTP 302
+grafana URL            HTTP 302
+modem URL              HTTP 200
+```
+
+This confirmed that the Traefik explicit Ingress status configuration survives reboot and that the validation script now handles the real boot sequence correctly: SSH first, Kubernetes health second, HTTP readiness last.
+
+### What was updated because of this step
+
+- `scripts/01-post-reboot-validate.sh` now returns retryable failure for transient URL mismatches in `--wait` mode.
+- The project report was updated with this final reboot validation.
+- The project report was copied between the ticket source and the Obsidian vault copy so both contain the final state.
+
+### Final operational conclusion
+
+The recovered model has now survived two controlled VM reboots. The final validated model is:
+
+- k3s starts with embedded CCM enabled.
+- k3s packaged Traefik is enabled.
+- Traefik binds host ports 80/443 via hostNetwork/hostPort.
+- Traefik publishes `100.67.90.12` into standard Ingress status.
+- ArgoCD sees `argocd-crib` as Healthy.
+- The old DNAT proxy remains disabled and inactive.
+- All public crib service URLs return expected responses after the cluster settles.

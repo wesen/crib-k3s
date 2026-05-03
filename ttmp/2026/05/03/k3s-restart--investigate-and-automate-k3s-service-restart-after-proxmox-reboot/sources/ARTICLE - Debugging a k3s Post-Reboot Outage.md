@@ -375,7 +375,8 @@ The persistent changes were:
 
 - `cloud-init.yaml` no longer writes `disable: - traefik` into `/etc/rancher/k3s/config.yaml`.
 - `cloud-init.yaml` now writes `/var/lib/rancher/k3s/server/manifests/traefik-config.yaml` with the hostPort Traefik `HelmChartConfig`.
-- `README.md` documents the final model: k3s packaged Traefik, hostNetwork + hostPort 80/443, and the legacy DNAT proxy disabled.
+- The Traefik `HelmChartConfig` uses `hostNetwork`, hostPorts 80/443, explicit Ingress status IP `100.67.90.12`, and `updateStrategy.type: Recreate`.
+- `README.md` documents the final model: k3s packaged Traefik, hostNetwork + hostPort 80/443, explicit Ingress status IP, and the legacy DNAT proxy disabled.
 
 This was committed in the crib-k3s repo as:
 
@@ -502,6 +503,46 @@ argocd-server-crib   traefik   argocd.crib.scapegoat.dev,k3s-proxmox.tail879302.
 `argocd-crib` then became `Healthy`. The validation script was tightened so it now requires every ArgoCD Application to be `Healthy` and explicitly checks that `argocd-server-crib` publishes `100.67.90.12` as its Ingress status address.
 
 This fix was applied live, written back to `/var/lib/rancher/k3s/server/manifests/traefik-config.yaml`, and persisted in `cloud-init.yaml` so the k3s packaged component manifest cannot revert after a restart or rebuild.
+
+## Final reboot validation after the ArgoCD health fix
+
+The final validation was a second controlled VM reboot after the Traefik Ingress status fix had been applied and persisted.
+
+```bash
+ssh ubuntu@100.67.90.12 'sudo reboot'
+./ttmp/2026/05/03/k3s-restart--investigate-and-automate-k3s-service-restart-after-proxmox-reboot/scripts/01-post-reboot-validate.sh --wait
+```
+
+This reboot validated the final form of the system, not just the initial recovery. It specifically proved that:
+
+- k3s starts with the embedded cloud-controller-manager enabled.
+- Traefik comes back with hostPort 80/443.
+- Traefik keeps publishing `100.67.90.12` into standard Ingress status.
+- `argocd-crib` returns to `Synced` and `Healthy` after boot.
+- The legacy DNAT proxy remains disabled and inactive.
+- The external crib URLs return their expected HTTP statuses.
+
+The first post-reboot validation pass occurred while the cluster was still settling. It saw transient `monitoring` Progressing health and a brief HTTP 503 from ArgoCD. That was a useful final test of the validation script itself: URL checks also need to be retryable in `--wait` mode. The script was adjusted so transient URL mismatches return failure to the wait loop instead of exiting immediately.
+
+The next validation attempt passed at `2026-05-03T09:25:56-04:00`:
+
+```text
+POST-REBOOT VALIDATION OK
+```
+
+The final verified state was:
+
+```text
+argocd-crib            Synced   Healthy
+monitoring             Synced   Healthy
+k3s-tailscale-proxy    disabled / inactive
+argocd URL             HTTP 200
+watch URL              HTTP 302
+grafana URL            HTTP 302
+modem URL              HTTP 200
+```
+
+At this point the recovered ingress model had survived two controlled VM reboots. The remaining untested scenario is a full VM rebuild from `cloud-init.yaml`; that is a stronger test than rebooting the already-repaired VM.
 
 ## Lessons learned
 
@@ -631,3 +672,7 @@ journalctl -u k3s.service | grep 'cloud-controller-manager exited'
 2. Test the updated `cloud-init.yaml` through a full VM rebuild, not just a reboot of the repaired VM.
 3. Decide whether to delete the disabled `k3s-tailscale-proxy.service` from the VM or leave it as an explicit rollback artifact.
 4. If the Tailscale IP changes, update DNS and Traefik's explicit `ingressendpoint.ip` together.
+
+## Final status
+
+The incident is resolved. The cluster, ingress controller, ArgoCD routes, and public crib service URLs recovered and survived two controlled VM reboots. The final validated ingress model is k3s packaged Traefik with hostNetwork, hostPorts 80/443, explicit Ingress status IP `100.67.90.12`, and the legacy DNAT proxy disabled.
