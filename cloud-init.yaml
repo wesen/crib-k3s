@@ -32,13 +32,45 @@ write_files:
     permissions: "0644"
     content: |
       write-kubeconfig-mode: "0644"
-      disable:
-        - traefik
       tls-san:
         - k3s-server
         - k3s-server.tail879302.ts.net
         - k3s-proxmox
         - k3s-proxmox.tail879302.ts.net
+
+  # --- k3s packaged Traefik config ---
+  # Keep Traefik enabled and bind HTTP/HTTPS directly on the host. This is the
+  # crib tailnet ingress model: *.crib.scapegoat.dev resolves to the VM's
+  # Tailscale IP, and Traefik receives traffic on host ports 80/443. Do not
+  # also enable the old k3s-tailscale-proxy DNAT service; it conflicts with
+  # this hostPort model.
+  - path: /var/lib/rancher/k3s/server/manifests/traefik-config.yaml
+    owner: root:root
+    permissions: "0644"
+    content: |
+      apiVersion: helm.cattle.io/v1
+      kind: HelmChartConfig
+      metadata:
+        name: traefik
+        namespace: kube-system
+      spec:
+        valuesContent: |-
+          service:
+            type: NodePort
+          deployment:
+            hostNetwork: true
+          securityContext:
+            capabilities:
+              drop: []
+              add:
+                - NET_BIND_SERVICE
+            runAsNonRoot: false
+            runAsUser: 0
+          ports:
+            web:
+              hostPort: 80
+            websecure:
+              hostPort: 443
 
   # --- Tailscale repo ---
   - path: /usr/share/keyrings/tailscale-archive-keyring.gpg

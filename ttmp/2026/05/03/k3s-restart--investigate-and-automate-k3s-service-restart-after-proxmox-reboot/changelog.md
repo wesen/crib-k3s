@@ -31,3 +31,14 @@ Wrote 360-line Obsidian vault article covering the full investigation, historica
 
 - /home/manuel/code/wesen/obsidian-vault/Projects/2026/05/03/ARTICLE - Debugging a k3s Post-Reboot Outage.md — Comprehensive article in Obsidian vault
 
+
+## 2026-05-03
+
+Takeover recovery completed: stabilized k3s via temporary CCM disable, re-enabled CCM after RBAC existed, restored Traefik hostPort ingress, disabled stale DNAT proxy, resynced ArgoCD apps, validated argocd/watch/grafana/modem URLs, and updated cloud-init/README for final ingress model.
+
+### Related Files
+
+- /home/manuel/code/wesen/crib-k3s/README.md — Document final ingress model and disabled legacy proxy
+- /home/manuel/code/wesen/crib-k3s/cloud-init.yaml — Persist final Traefik-enabled hostPort model
+- /home/manuel/code/wesen/crib-k3s/ttmp/2026/05/03/k3s-restart--investigate-and-automate-k3s-service-restart-after-proxmox-reboot/reference/02-diary-takeover-crashloop-investigation.md — Takeover diary with recovery steps
+

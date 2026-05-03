@@ -16,10 +16,14 @@ RelatedFiles:
       Note: Full setup documentation with k3s config
     - Path: ../../../../../../obsidian-vault/Projects/PROJ - Jellyfin Media Server.md
       Note: Jellyfin deployment details including services
+    - Path: README.md
+      Note: Updated final ingress model after takeover recovery
     - Path: cloud-init.yaml
       Note: Cloud-init template that disables Traefik - root cause
     - Path: kubeconfig.yaml
       Note: Kubeconfig for accessing the k3s cluster
+    - Path: ttmp/2026/05/03/k3s-restart--investigate-and-automate-k3s-service-restart-after-proxmox-reboot/reference/02-diary-takeover-crashloop-investigation.md
+      Note: Independent takeover diary and successful recovery trail
     - Path: ttmp/2026/05/03/k3s-restart--investigate-and-automate-k3s-service-restart-after-proxmox-reboot/sources/ARTICLE - Debugging a k3s Post-Reboot Outage.md
       Note: Obsidian vault article copied into ticket workspace
 ExternalSources: []
@@ -28,6 +32,7 @@ LastUpdated: 2026-05-03T07:40:39.245382313-04:00
 WhatFor: ""
 WhenToUse: ""
 ---
+
 
 
 

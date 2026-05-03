@@ -12,8 +12,9 @@ k3s cluster on Proxmox with ArgoCD GitOps, reached over Tailscale at `*.crib.sca
 | ArgoCD | admin password in `/root/argocd-password` on VM |
 | DNS | `*.crib.scapegoat.dev → 100.67.90.12` (DigitalOcean A record to the Tailscale IP) |
 | TLS | Let's Encrypt via cert-manager DNS01 (DigitalOcean), with a shared wildcard cert reused by app routes |
-| Ingress | Traefik (k3s default), usually via `IngressRoute` and `crib-scapegoat-dev-tls` |
+| Ingress | k3s packaged Traefik, configured by cloud-init HelmChartConfig with hostNetwork + hostPort 80/443 |
 | Access model | Custom `*.crib.scapegoat.dev` names are tailnet-facing; Tailscale Funnel was tried for custom domains but is not the current model |
+| Legacy proxy | `k3s-tailscale-proxy.service` DNAT-to-NodePort is disabled; do not enable it with the Traefik hostPort model |
 
 ## Access
 
