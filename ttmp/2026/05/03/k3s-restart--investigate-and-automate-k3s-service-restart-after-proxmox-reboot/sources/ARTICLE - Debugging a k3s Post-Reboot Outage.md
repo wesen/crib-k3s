@@ -16,19 +16,21 @@ status: active
 type: article
 created: 2026-05-03
 repo: /home/manuel/code/wesen/crib-k3s
+last_updated: 2026-05-03
 ---
 
 # Debugging a k3s Post-Reboot Outage — Traefik, HelmCharts, and Crash Loops
 
-This article documents a multi-hour investigation into why a single-node k3s cluster on Proxmox lost all external connectivity after a host reboot. The root cause turned out to be a layered chain of decisions made weeks earlier: a cloud-init template that disabled Traefik, a HelmChartConfig that was removed from git, and an iptables forwarding service that appeared healthy while forwarding to ports with no listener. The fix itself introduced a second problem — a known k3s race condition in the cloud-controller-manager that caused the entire cluster to crash-loop.
+This article documents a multi-hour investigation into why a single-node k3s cluster on Proxmox lost all external connectivity after a host reboot. The root cause turned out to be a layered chain of decisions made weeks earlier: a cloud-init template that disabled Traefik, a HelmChartConfig that was removed from git, and an iptables forwarding service that appeared healthy while forwarding to ports with no listener. The first fix attempt exposed a second problem — a known k3s race condition in the embedded cloud-controller-manager. The takeover recovery resolved both layers: k3s was stabilized long enough for its CCM RBAC manifests to apply, the cloud controller was re-enabled, Traefik was restored with hostPorts, stale DNAT forwarding was disabled, and ArgoCD was forced to retry applications whose previous syncs failed while Traefik CRDs were absent.
 
-The article is written for someone who needs to understand not just what happened, but why each layer behaved the way it did, and what the debugging process looked like in practice.
+The article is written for someone who needs to understand not just what happened, but why each layer behaved the way it did, how the recovery worked, and what the final operating model is.
 
 > [!summary]
 > 1. **Traefik was never re-deployed after reboot** because k3s config disabled it and the HelmChartConfig that previously overrode that was removed from git
-> 2. **The iptables proxy masked the problem** — it reported healthy while forwarding to dead ports
+> 2. **The iptables proxy masked the problem** — it reported healthy while forwarding to dead NodePorts
 > 3. **Re-enabling Traefik triggered a k3s crash loop** — a known RBAC race condition in the cloud-controller-manager ([k3s#7328](https://github.com/k3s-io/k3s/issues/7328))
-> 4. **Two independent oversights compounded** — the cloud-init was never updated to reflect a manual fix, and the HelmChartConfig removal was based on a misunderstanding of the networking architecture
+> 4. **The successful recovery used ordering, not force** — temporarily disable embedded CCM, let RBAC apply, re-enable CCM, then restore Traefik routes
+> 5. **The final ingress model is Traefik hostPorts** — `*.crib.scapegoat.dev` resolves to the VM's Tailscale IP and Traefik binds host ports 80/443 directly; the old DNAT proxy is disabled
 
 ## Why this note exists
 
@@ -40,7 +42,7 @@ The article also serves as a reference for the crib cluster's networking archite
 
 The crib cluster is a single-node k3s installation running as a QEMU VM (ID 301) on a Proxmox 8.1.4 host at home, behind a Cox cable modem. The VM runs Ubuntu Noble 24.04 with 4 cores and 8GB RAM. It was bootstrapped from a cloud image using cloud-init.
 
-The networking stack has four layers:
+The final networking stack has four layers. The important change from the failed state is that Traefik now binds host ports 80 and 443 directly. The old `k3s-tailscale-proxy.service` DNAT-to-NodePort layer is disabled.
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
@@ -52,16 +54,16 @@ The networking stack has four layers:
 │  Layer 3: Tailscale Overlay                                   │
 │  100.67.90.12 (k3s-proxmox)  — WireGuard mesh network        │
 └──────────────────────┬───────────────────────────────────────┘
-                       │ DNAT via iptables
+                       │ TCP 80/443 delivered to host
 ┌──────────────────────▼───────────────────────────────────────┐
-│  Layer 2: iptables DNAT (k3s-tailscale-proxy.service)         │
-│  :80  →  127.0.0.1:32277   (Traefik HTTP NodePort)           │
-│  :443 →  127.0.0.1:32241   (Traefik HTTPS NodePort)          │
+│  Layer 2: Traefik hostPorts                                   │
+│  host :80  →  traefik container :8000                         │
+│  host :443 →  traefik container :8443                         │
 └──────────────────────┬───────────────────────────────────────┘
-                       │ forwarded to
+                       │ routes by Host() rule
 ┌──────────────────────▼───────────────────────────────────────┐
-│  Layer 1: Physical / LAN                                      │
-│  192.168.0.212 (VM) ← vmbr0 → 192.168.0.227 (Proxmox)       │
+│  Layer 1: Kubernetes services and pods                        │
+│  Jellyfin, ArgoCD, Grafana, poll-modem                        │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -70,7 +72,7 @@ Traffic flow for `https://watch.crib.scapegoat.dev`:
 1. Browser resolves `watch.crib.scapegoat.dev` → `100.67.90.12` (Tailscale IP)
 2. Browser connects to `100.67.90.12:443` over the Tailscale WireGuard tunnel
 3. VM receives the connection on the `tailscale0` interface
-4. iptables DNAT rule rewrites destination to `127.0.0.1:32241` (Traefik HTTPS NodePort)
+4. Traefik receives the connection through its `hostPort: 443` binding and container port `8443`
 5. Traefik terminates TLS and routes the request to the `jellyfin` service based on the `Host()` match in its `IngressRoute` resource
 
 The cable modem at `192.168.0.1` does not reliably bridge traffic between physical and virtual MAC addresses, which is why Tailscale is essential. Without the overlay network, the VM is unreachable from any device other than the Proxmox host itself.
@@ -224,30 +226,174 @@ This is a **known k3s race condition** documented in [k3s issue #7328](https://g
 
 The issue report says "Restarting the k3s service resolves the issue" because on the second start, the RoleBinding already exists from the first attempt. But in our case, k3s kept hitting the same race on every restart. The likely reason is that k3s uses kine (a SQLite-backed etcd replacement) for state storage, and the crash may prevent the RoleBinding from being persisted.
 
-k3s would briefly start (the node became Ready for a few seconds), then crash when the CCM exited. The cycle repeated every 30-60 seconds. The API server was only briefly available between crashes, making it impossible to apply manual fixes via `kubectl`.
+k3s would briefly start (the node became Ready for a few seconds), then crash when the CCM exited. The cycle repeated every 30-60 seconds. The API server was only briefly available between crashes, making it difficult to apply manual fixes via `kubectl`.
+
+## The takeover recovery
+
+The successful recovery did not try to race `kubectl` against the crash loop. It changed the startup order so k3s could apply its own packaged manifests.
+
+The key observation was that the missing RoleBinding was already present on disk in:
+
+```text
+/var/lib/rancher/k3s/server/manifests/ccm.yaml
+```
+
+The manifest contained exactly the RoleBinding needed by the error:
+
+```yaml
+kind: RoleBinding
+metadata:
+  name: k3s-cloud-controller-manager-authentication-reader
+  namespace: kube-system
+roleRef:
+  kind: Role
+  name: extension-apiserver-authentication-reader
+subjects:
+- kind: User
+  name: k3s-cloud-controller-manager
+```
+
+The failure was not that we did not know what RBAC to create. The failure was that the embedded cloud-controller-manager started before k3s had time to apply that manifest. The recovery sequence was therefore:
+
+```text
+1. Add disable-cloud-controller: true to k3s config.
+2. Restart k3s.
+3. Let k3s start without launching embedded CCM.
+4. Let the add-on controller apply ccm.yaml and other packaged manifests.
+5. Verify the RoleBinding exists.
+6. Verify the previously forbidden access now works.
+7. Remove disable-cloud-controller: true.
+8. Restart k3s.
+9. Confirm embedded CCM starts without crashing.
+```
+
+The validation command was:
+
+```bash
+kubectl auth can-i get configmap/extension-apiserver-authentication \
+  --as=k3s-cloud-controller-manager \
+  -n kube-system
+```
+
+It returned:
+
+```text
+yes
+```
+
+After that, removing `disable-cloud-controller: true` and restarting k3s succeeded. The cloud-controller-manager started normally, the node stayed `Ready`, and `k3s.service` remained `active (running)`.
+
+## Restoring ingress
+
+Once k3s was stable and Traefik was running, a second networking bug remained. The old systemd proxy service still had DNAT rules that rewrote Tailscale traffic from ports 80/443 to old NodePorts `32277/32241`. But the restored Traefik service was now using a hostPort model, and its current NodePorts were different (`31310/31810`). The stale DNAT rules intercepted traffic before Traefik's hostPorts could receive it.
+
+The fix was to stop and disable the proxy:
+
+```bash
+sudo systemctl stop k3s-tailscale-proxy.service
+sudo systemctl disable k3s-tailscale-proxy.service
+```
+
+Stopping the service also ran its `ExecStop` commands, removing the stale DNAT rules. From that point on, traffic could reach Traefik directly on host ports 80 and 443.
+
+The final live Traefik configuration uses the k3s packaged Helm chart and a `HelmChartConfig` equivalent to:
+
+```yaml
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata:
+  name: traefik
+  namespace: kube-system
+spec:
+  valuesContent: |-
+    service:
+      type: NodePort
+    deployment:
+      hostNetwork: true
+    securityContext:
+      capabilities:
+        drop: []
+        add:
+          - NET_BIND_SERVICE
+      runAsNonRoot: false
+      runAsUser: 0
+    ports:
+      web:
+        hostPort: 80
+      websecure:
+        hostPort: 443
+```
+
+## Restoring ArgoCD application routes
+
+After Traefik CRDs existed again, the app-specific `IngressRoute` resources were still missing. ArgoCD had tried to sync `jellyfin`, `grafana-crib`, and `poll-modem` while the CRDs were absent. Those sync attempts failed. Later, after Traefik installed the CRDs, ArgoCD still refused to retry the same git revision automatically:
+
+```text
+Skipping auto-sync: failed previous sync attempt to [revision] and will not retry for [revision]
+```
+
+The recovery was to trigger explicit ArgoCD sync operations by patching the `Application.operation` field:
+
+```bash
+for app in jellyfin grafana-crib poll-modem; do
+  kubectl patch application "$app" -n argocd --type merge -p '{
+    "operation": {
+      "initiatedBy": {"username": "pi-takeover"},
+      "sync": {
+        "revision": "b3198e0de27f82b6f4007ce221904fc956b2176b",
+        "prune": true
+      }
+    }
+  }'
+done
+```
+
+After that, the IngressRoutes were created:
+
+```text
+jellyfin/jellyfin
+jellyfin/jellyfin-http
+jellyfin/jellyfin-tv
+monitoring/grafana
+poll-modem/poll-modem
+```
+
+The final URL validation was:
+
+```text
+https://argocd.crib.scapegoat.dev/  -> HTTP/2 200
+https://watch.crib.scapegoat.dev/   -> HTTP/2 302 location: web/
+https://grafana.crib.scapegoat.dev/ -> HTTP/2 302 location: /login
+https://modem.crib.scapegoat.dev/   -> HTTP/2 200
+```
+
+## Persisting the recovered model
+
+The live system was not enough. The repo needed to be updated so the next VM rebuild or reboot would not recreate the same failure.
+
+The persistent changes were:
+
+- `cloud-init.yaml` no longer writes `disable: - traefik` into `/etc/rancher/k3s/config.yaml`.
+- `cloud-init.yaml` now writes `/var/lib/rancher/k3s/server/manifests/traefik-config.yaml` with the hostPort Traefik `HelmChartConfig`.
+- `README.md` documents the final model: k3s packaged Traefik, hostNetwork + hostPort 80/443, and the legacy DNAT proxy disabled.
+
+This was committed in the crib-k3s repo as:
+
+```text
+21e90a8 Recover crib k3s ingress and persist Traefik hostPort model
+```
 
 ## Lessons learned
 
-### Oneshot systemd services need health checks
+### Do not mix ingress exposure models
 
-The `k3s-tailscale-proxy.service` is a `Type=oneshot` service with `RemainAfterExit=yes`. It runs once at boot, adds iptables rules, and exits. Systemd considers it permanently active after that. There is no mechanism to verify that the backend (Traefik NodePorts) is actually listening.
+The failure combined two incompatible models. The old model used `k3s-tailscale-proxy.service` to DNAT traffic from the Tailscale IP to fixed Traefik NodePorts. The recovered model uses Traefik hostPorts 80/443 directly. Either model can work if designed carefully, but combining them creates a black hole: PREROUTING rewrites traffic before Traefik's hostPort path can receive it.
 
-A better design would include a verification step:
+The current rule is simple:
 
-```bash
-#!/bin/bash
-# /usr/local/bin/check-traefik-ports.sh
-for port in 32277 32241; do
-  timeout=0
-  while ! ss -tlnp | grep -q ":$port " && [ $timeout -lt 60 ]; do
-    sleep 2
-    timeout=$((timeout + 2))
-  done
-  if ! ss -tlnp | grep -q ":$port "; then
-    echo "WARNING: Port $port not listening after 60s"
-  fi
-done
-```
+- Use k3s packaged Traefik with hostNetwork + hostPort 80/443.
+- Keep `k3s-tailscale-proxy.service` disabled.
+- Do not add DNAT rules for ports 80/443 unless Traefik is intentionally configured without hostPorts and with known fixed NodePorts.
 
 ### Cloud-init state diverges from running state silently
 
@@ -278,7 +424,7 @@ The commit message "using systemd iptables instead" in `ec66802` is actively mis
 
 k3s issue [#7328](https://github.com/k3s-io/k3s/issues/7328) describes a race condition where the cloud-controller-manager starts before the RBAC RoleBinding that grants it access to the `extension-apiserver-authentication` ConfigMap is created. The CCM exits with a permission error, and k3s treats this as fatal, shutting down the entire server.
 
-The fix in the issue is simply to restart k3s again — on the second start, the RoleBinding should already exist. But when the race persists across multiple restarts (as in our case), the situation is more complex and may require manually creating the RoleBinding during a brief window when the API server is up, or stopping k3s entirely, cleaning stale state, and starting fresh.
+The fix in the issue is simply to restart k3s again — on the second start, the RoleBinding should already exist. In this incident the race persisted until we changed the startup ordering. Temporarily setting `disable-cloud-controller: true` let the API server and add-on controller stay up long enough to apply `ccm.yaml`. Once the RoleBinding existed, the embedded cloud controller could be re-enabled and k3s stayed stable.
 
 ## Common failure modes
 
@@ -295,7 +441,7 @@ ss -tlnp | grep -E '32277|32241'       # nothing
 iptables -t nat -L PREROUTING -n -v     # DNAT rules present
 ```
 
-**Fix:** Re-enable Traefik in k3s config and restart.
+**Fix:** Re-enable Traefik in k3s config, ensure the hostPort `HelmChartConfig` exists, stop/disable the legacy DNAT proxy if using hostPorts, and restart k3s.
 
 ### Failure mode 2: k3s crash loop after config change
 
@@ -308,7 +454,7 @@ iptables -t nat -L PREROUTING -n -v     # DNAT rules present
 journalctl -u k3s.service | grep 'cloud-controller-manager exited'
 ```
 
-**Fix:** Restart k3s again. If the race persists, manually create the RoleBinding during a brief API server window, or restore the previous config to stabilize.
+**Fix:** Restart k3s again. If the race persists, temporarily set `disable-cloud-controller: true`, restart k3s, wait for `ccm.yaml` to apply, verify `kubectl auth can-i ... --as=k3s-cloud-controller-manager` returns `yes`, then remove `disable-cloud-controller: true` and restart k3s again.
 
 ### Failure mode 3: Tailscale hostname confusion
 
@@ -322,17 +468,19 @@ journalctl -u k3s.service | grep 'cloud-controller-manager exited'
 
 1. **Never edit k3s config on the VM without updating cloud-init.** Any manual change to `/etc/rancher/k3s/config.yaml` must be propagated to `cloud-init.yaml` in the git repo, or the change will be lost on VM rebuild.
 
-2. **The iptables proxy does not replace Traefik.** The `k3s-tailscale-proxy.service` handles DNAT forwarding only. Traefik (or another ingress controller) must be running for services to be reachable.
+2. **The current ingress model is Traefik hostPort, not DNAT-to-NodePort.** The `k3s-tailscale-proxy.service` is legacy and disabled. Do not re-enable it while Traefik binds host ports 80/443.
 
-3. **Add health checks to oneshot services.** A systemd oneshot that sets up network rules should verify that its backend is listening before reporting success.
+3. **Use temporary CCM disable as a recovery lever, not as the final state.** If the embedded cloud-controller-manager crashes before its RBAC applies, temporarily set `disable-cloud-controller: true`, let `ccm.yaml` reconcile, verify RBAC, then remove the flag.
 
-4. **Write accurate commit messages for infrastructure changes.** "using systemd iptables instead" obscured the fact that Traefik was still needed. Infrastructure commits should name the specific component being changed and what replaces what.
+4. **ArgoCD may not retry the same failed revision automatically.** If CRDs were missing during a failed sync, manually trigger a sync operation after the CRDs are restored.
 
-5. **Test recovery procedures before you need them.** The post-reboot recovery was not tested when the iptables proxy was set up. A single test — reboot the VM and verify services come back — would have caught the Traefik gap immediately.
+5. **Write accurate commit messages for infrastructure changes.** "using systemd iptables instead" obscured the fact that Traefik was still needed. Infrastructure commits should name the specific component being changed and what replaces what.
 
-6. **Consolidate Tailscale identities.** Use a single hostname for each VM. Clean up stale registrations promptly.
+6. **Test recovery procedures before you need them.** The post-reboot recovery was not tested when the iptables proxy was set up. A single test — reboot the VM and verify services come back — would have caught the Traefik gap immediately.
 
-7. **After any k3s config change, verify the node is stable for 5+ minutes.** The CCM race condition can take up to 30 seconds to manifest. A quick `kubectl get nodes` is not sufficient.
+7. **Consolidate Tailscale identities.** Use a single hostname for each VM. Clean up stale registrations promptly.
+
+8. **After any k3s config change, verify the node is stable for 5+ minutes.** The CCM race condition can take up to 30 seconds to manifest. A quick `kubectl get nodes` is not sufficient.
 
 ## Related resources
 
@@ -344,17 +492,16 @@ journalctl -u k3s.service | grep 'cloud-controller-manager exited'
 - Ticket workspace: `ttmp/2026/05/03/k3s-restart--investigate-and-automate-k3s-service-restart-after-proxmox-reboot/`
 - Session transcript: `/home/manuel/.pi/agent/sessions/--home-manuel-code-wesen-crib-k3s--/2026-05-03T11-37-51-600Z_019deda1-68ef-7233-a49b-487d09b04b5d.jsonl`
 
-## Open questions
+## Resolved questions
 
-- How to resolve the persistent CCM crash loop — is it necessary to wipe k3s state and re-bootstrap, or can the RBAC resources be manually injected?
-- Should Traefik be deployed via k3s packaged component (remove from disable list) or independently via Helm?
-- Is the Funnel-to-tailnet pivot the right long-term model, or should Funnel be re-enabled for services that need public access?
+- **How do we resolve the persistent CCM crash loop?** Temporarily disable the embedded cloud controller, let `ccm.yaml` apply the missing RBAC, verify access, then re-enable the cloud controller.
+- **Should Traefik be deployed through k3s packaged components or independently via Helm?** The recovered and persisted model uses k3s packaged Traefik plus a `HelmChartConfig` written by cloud-init.
+- **Should the DNAT proxy remain enabled?** No. It conflicts with the hostPort model and is disabled.
+- **Was this related to a Tailscale exit node?** No local evidence supports that. The evidence points to inbound Funnel/tailnet ingress experiments, not exit-node routing.
 
 ## Near-term next steps
 
-1. Restore k3s to a stable state (re-add `disable: - traefik` if needed to stop the crash loop)
-2. Deploy Traefik independently via Helm (bypasses k3s packaged component mechanism entirely)
-3. Update `cloud-init.yaml` to match the intended running state
-4. Add a health check to `k3s-tailscale-proxy.service`
-5. Create a post-reboot validation script
-6. Test the full recovery procedure end-to-end
+1. Write a post-reboot validation script that checks k3s, Traefik, ArgoCD sync state, IngressRoutes, and external URLs.
+2. Write a concise operator playbook based on the takeover recovery sequence.
+3. Test the updated `cloud-init.yaml` through a rebuild or at least through a controlled VM reboot.
+4. Decide whether to delete the disabled `k3s-tailscale-proxy.service` from the VM or leave it as an explicit rollback artifact.

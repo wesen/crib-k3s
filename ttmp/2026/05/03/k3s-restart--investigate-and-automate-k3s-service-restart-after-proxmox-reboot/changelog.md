@@ -42,3 +42,13 @@ Takeover recovery completed: stabilized k3s via temporary CCM disable, re-enable
 - /home/manuel/code/wesen/crib-k3s/cloud-init.yaml — Persist final Traefik-enabled hostPort model
 - /home/manuel/code/wesen/crib-k3s/ttmp/2026/05/03/k3s-restart--investigate-and-automate-k3s-service-restart-after-proxmox-reboot/reference/02-diary-takeover-crashloop-investigation.md — Takeover diary with recovery steps
 
+
+## 2026-05-03
+
+Updated Obsidian project report with successful takeover recovery: CCM ordering workaround, hostPort Traefik model, disabled DNAT proxy, ArgoCD manual retries, final URL validation; copied updated 507-line article back to ticket sources.
+
+### Related Files
+
+- /home/manuel/code/wesen/crib-k3s/ttmp/2026/05/03/k3s-restart--investigate-and-automate-k3s-service-restart-after-proxmox-reboot/sources/ARTICLE - Debugging a k3s Post-Reboot Outage.md — Copied updated report into ticket sources
+- /home/manuel/code/wesen/obsidian-vault/Projects/2026/05/03/ARTICLE - Debugging a k3s Post-Reboot Outage.md — Updated vault project report with completed recovery
+
